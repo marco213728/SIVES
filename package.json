@@ -1,0 +1,18 @@
+{
+  "name": "sives-sistema-votacion-escolar",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "build:css": "tailwindcss -i ./styles.css -o ./dist/styles.css --minify",
+    "build:js": "esbuild index.tsx --bundle --outfile=dist/index.js --loader:.tsx=tsx --jsx=automatic --minify",
+    "build": "mkdir -p dist && cp index.html dist/ && npm run build:css && npm run build:js"
+  },
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.7",
+    "autoprefixer": "^10.4.19",
+    "esbuild": "^0.21.5",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.2.2"
+  }
+}
