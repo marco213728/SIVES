@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -72,7 +73,9 @@ const App: React.FC = () => {
     setCurrentUser(null);
     setShowSettings(false);
     setShowTimeoutWarning(false);
+    // FIX: Pass the timeout ID to clearTimeout.
     if(timeoutId.current) clearTimeout(timeoutId.current);
+    // FIX: Pass the timeout ID to clearTimeout.
     if(warningTimeoutId.current) clearTimeout(warningTimeoutId.current);
   }, []);
 
@@ -164,7 +167,7 @@ const App: React.FC = () => {
     return true;
   };
 
-  const handleVote = async (electionId: number, candidateId: number | null, isBlankVote: boolean, writeInName?: string) => {
+  const handleVote = async (electionId: string, candidateId: string | null, isBlankVote: boolean, writeInName?: string) => {
     if (!currentUser || !currentOrganization) return;
     const { updatedVote, updatedUser } = await apiService.addVote(currentUser.id, currentOrganization.id, electionId, candidateId, writeInName);
     
@@ -183,7 +186,7 @@ const App: React.FC = () => {
     const updatedElection = await apiService.updateElection(election);
     setElections(prev => prev.map(e => e.id === updatedElection.id ? updatedElection : e));
   };
-  const handleDeleteElection = async (id: number) => {
+  const handleDeleteElection = async (id: string) => {
     await apiService.deleteElection(id);
     setElections(prev => prev.filter(e => e.id !== id));
   };
@@ -196,7 +199,7 @@ const App: React.FC = () => {
     const updatedCandidate = await apiService.updateCandidate(candidate);
     setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
   };
-  const handleDeleteCandidate = async (id: number) => {
+  const handleDeleteCandidate = async (id: string) => {
     await apiService.deleteCandidate(id);
     setCandidates(prev => prev.filter(c => c.id !== id));
   };
@@ -213,7 +216,7 @@ const App: React.FC = () => {
         setCurrentUser(updatedUser);
     }
   };
-  const handleDeleteVoter = async (id: number) => {
+  const handleDeleteVoter = async (id: string) => {
     await apiService.deleteUser(id);
     setUsers(prev => prev.filter(u => u.id !== id));
   };

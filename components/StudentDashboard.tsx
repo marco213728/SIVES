@@ -10,7 +10,7 @@ interface StudentDashboardProps {
   closedElectionsWithPublicResults: Election[];
   candidates: Candidate[];
   votes: Vote[];
-  onVote: (electionId: number, candidateId: number | null, isBlankVote: boolean, writeInName?: string) => void;
+  onVote: (electionId: string, candidateId: string | null, isBlankVote: boolean, writeInName?: string) => void;
   lastVoteReceipts: string[];
 }
 

@@ -26,7 +26,7 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ isOpen, onClose
     useEffect(() => {
         if (candidate) {
             setFormData({
-                eleccion_id: String(candidate.eleccion_id),
+                eleccion_id: candidate.eleccion_id,
                 nombres: candidate.nombres,
                 apellido: candidate.apellido,
                 partido_politico: candidate.partido_politico,
@@ -36,7 +36,7 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ isOpen, onClose
             });
         } else {
              // Set default election if available
-            const defaultElectionId = elections.length > 0 ? String(elections[0].id) : '';
+            const defaultElectionId = elections.length > 0 ? elections[0].id : '';
             setFormData({...initialFormData, eleccion_id: defaultElectionId });
         }
     }, [candidate, elections, isOpen]);
@@ -60,7 +60,6 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ isOpen, onClose
 
         const submissionData = {
             ...formData,
-            eleccion_id: Number(formData.eleccion_id),
             foto_url: formData.foto_url || `https://picsum.photos/seed/${formData.nombres.toLowerCase()}/200`
         };
 

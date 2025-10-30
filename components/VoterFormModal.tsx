@@ -62,7 +62,8 @@ const VoterFormModal: React.FC<VoterFormModalProps> = ({ isOpen, onClose, onSubm
         if (voter) {
             onSubmit({ ...voter, ...formData });
         } else {
-            onSubmit(formData);
+            // FIX: Add a dummy organizationId to satisfy the type. It will be overwritten later.
+            onSubmit({ ...formData, organizationId: '' });
         }
     };
 

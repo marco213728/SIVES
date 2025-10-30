@@ -17,13 +17,13 @@ interface AdminDashboardProps {
     votes: Vote[];
     onAddElection: (election: Omit<Election, 'id'>) => void;
     onUpdateElection: (election: Election) => void;
-    onDeleteElection: (id: number) => void;
+    onDeleteElection: (id: string) => void;
     onAddCandidate: (candidate: Omit<Candidate, 'id'>) => void;
     onUpdateCandidate: (candidate: Candidate) => void;
-    onDeleteCandidate: (id: number) => void;
+    onDeleteCandidate: (id: string) => void;
     onAddVoter: (voter: Omit<User, 'id' | 'ha_votado'>) => void;
     onUpdateVoter: (voter: User) => void;
-    onDeleteVoter: (id: number) => void;
+    onDeleteVoter: (id: string) => void;
     onImportVoters: (voters: Omit<User, 'id' | 'rol' | 'ha_votado'>[]) => void;
 }
 
@@ -169,7 +169,7 @@ const ViewResults: React.FC<{ elections: Election[], candidates: Candidate[], vo
     </div>
 );
 
-const ManageElections: React.FC<{ elections: Election[], openModal: (e: Election | null) => void, onDelete: (id: number) => void, onViewOverview: (e: Election) => void }> = ({ elections, openModal, onDelete, onViewOverview }) => (
+const ManageElections: React.FC<{ elections: Election[], openModal: (e: Election | null) => void, onDelete: (id: string) => void, onViewOverview: (e: Election) => void }> = ({ elections, openModal, onDelete, onViewOverview }) => (
     <div>
         <div className="flex justify-between items-center mb-4">
             <h3 className="text-xl font-semibold">Gestionar Elecciones</h3>
@@ -199,8 +199,8 @@ const ManageElections: React.FC<{ elections: Election[], openModal: (e: Election
     </div>
 );
 
-const ManageCandidates: React.FC<{ candidates: Candidate[], elections: Election[], openModal: (c: Candidate | null) => void, onDelete: (id: number) => void }> = ({ candidates, elections, openModal, onDelete }) => {
-    const getElectionName = (id: number) => elections.find(e => e.id === id)?.nombre || 'Desconocida';
+const ManageCandidates: React.FC<{ candidates: Candidate[], elections: Election[], openModal: (c: Candidate | null) => void, onDelete: (id: string) => void }> = ({ candidates, elections, openModal, onDelete }) => {
+    const getElectionName = (id: string) => elections.find(e => e.id === id)?.nombre || 'Desconocida';
     return (
         <div>
             <div className="flex justify-between items-center mb-4">
@@ -237,7 +237,7 @@ const getFullName = (u: User) => {
     return `${u.primer_nombre} ${u.segundo_nombre} ${u.primer_apellido} ${u.segundo_apellido}`.replace(/ +/g, ' ').trim();
 };
 
-const ManageVoters: React.FC<{ users: User[], openModal: (u: User | null) => void, onDelete: (id: number) => void, openImportModal: () => void }> = ({ users, openModal, onDelete, openImportModal }) => {
+const ManageVoters: React.FC<{ users: User[], openModal: (u: User | null) => void, onDelete: (id: string) => void, openImportModal: () => void }> = ({ users, openModal, onDelete, openImportModal }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCurso, setFilterCurso] = useState('all');
     const [filterParalelo, setFilterParalelo] = useState('all');

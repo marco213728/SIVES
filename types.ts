@@ -1,10 +1,10 @@
 // FIX: Define interfaces for data models used in the application.
 export interface User {
-  id: number;
-  organizationId: number;
+  id: string;
+  organizationId: string;
   codigo: string;
   rol: 'Estudiante' | 'Admin';
-  ha_votado: number[]; // Array of election IDs voted in
+  ha_votado: string[]; // Array of election IDs voted in
   primer_nombre: string;
   segundo_nombre: string;
   primer_apellido: string;
@@ -16,8 +16,8 @@ export interface User {
 }
 
 export interface Election {
-  id: number;
-  organizationId: number;
+  id: string;
+  organizationId: string;
   nombre: string;
   fecha_inicio: string; // YYYY-MM-DD
   fecha_fin: string; // YYYY-MM-DD
@@ -27,8 +27,8 @@ export interface Election {
 }
 
 export interface Candidate {
-  id: number;
-  eleccion_id: number;
+  id: string;
+  eleccion_id: string;
   nombres: string;
   apellido: string;
   partido_politico: string;
@@ -38,18 +38,18 @@ export interface Candidate {
 }
 
 export interface Vote {
-  id: number;
-  organizationId: number;
-  eleccion_id: number;
-  user_id: number;
-  candidato_id: number | null; // null for blank vote
+  id: string;
+  organizationId: string;
+  eleccion_id: string;
+  user_id: string;
+  candidato_id: string | null; // null for blank vote
   write_in_name?: string; // for write-in votes
   fecha_voto: string; // ISO string
   receipt: string;
 }
 
 export interface Organization {
-  id: number;
+  id: string;
   slug: string; // for URL identification, e.g., 'alberto-allauca'
   name: string;
   logoUrl: string | null;

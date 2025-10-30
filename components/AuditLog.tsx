@@ -10,14 +10,15 @@ const AuditLog: React.FC<{ votes: Vote[], elections: Election[] }> = ({ votes, e
         return elections.reduce((acc, election) => {
             acc[election.id] = election.nombre;
             return acc;
-        }, {} as Record<number, string>);
+        }, {} as Record<string, string>);
     }, [elections]);
 
     const filteredVotes = useMemo(() => {
         return votes
             .filter(vote => {
                 if (selectedElectionId === 'all') return true;
-                return vote.eleccion_id === parseInt(selectedElectionId, 10);
+                // FIX: Compare string with string, not number.
+                return vote.eleccion_id === selectedElectionId;
             })
             .filter(vote => {
                 if (!searchTerm.trim()) return true;
