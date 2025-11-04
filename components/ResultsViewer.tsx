@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Election, Candidate, Vote } from '../types';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface ResultsViewerProps {
     election: Election;
@@ -125,37 +125,52 @@ const ResultsViewer: React.FC<ResultsViewerProps> = ({ election, candidates, vot
             {results.totalVotes === 0 ? (
                 <p className="text-center text-gray-500 py-8">Aún no hay votos para esta elección.</p>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                    <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                    <div className="divide-y divide-slate-200">
                         {results.sortedCandidates.map((candidate, index) => (
-                            <div key={candidate.id}>
-                                <div className="flex justify-between mb-1">
-                                    <span className="text-base font-medium text-slate-800 flex items-center">
-                                        <span className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: pieData.find(p => p.name === getCandidateFullName(candidate))?.color || BASE_COLORS[index % BASE_COLORS.length]}}></span>
-                                        {getCandidateFullName(candidate)}
-                                    </span>
-                                    <span className="text-sm font-medium text-slate-600">{candidate.voteCount} votos ({candidate.percentage.toFixed(2)}%)</span>
+                            <div key={candidate.id} className="py-4">
+                                <div className="flex items-center space-x-4">
+                                    <div className="flex-shrink-0 flex items-center -space-x-3">
+                                        <img src={candidate.foto_url} alt={getCandidateFullName(candidate)} className="h-12 w-12 rounded-full object-cover ring-2 ring-white z-10" />
+                                        {candidate.listLogoUrl && (
+                                            <div className="h-12 w-12 rounded-full ring-2 ring-white bg-white flex items-center justify-center p-1">
+                                                <img src={candidate.listLogoUrl} alt={`${candidate.partido_politico} Logo`} className="h-full w-full object-contain" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex-grow min-w-0">
+                                        <p className="font-bold text-slate-800 truncate">{getCandidateFullName(candidate)}</p>
+                                        <p className="text-sm text-gray-500 truncate">{candidate.partido_politico}</p>
+                                    </div>
+                                    <div className="flex-shrink-0 text-right">
+                                        <p className="font-bold text-slate-700">{candidate.voteCount} votos</p>
+                                        <p className="text-sm text-gray-500">{candidate.percentage.toFixed(2)}%</p>
+                                    </div>
                                 </div>
-                                <div className="w-full bg-slate-200 rounded-full h-2.5">
-                                    <div className="h-2.5 rounded-full" style={{ width: `${candidate.percentage}%`, backgroundColor: pieData.find(p => p.name === getCandidateFullName(candidate))?.color || BASE_COLORS[index % BASE_COLORS.length] }}></div>
-                                </div>
-                            </div>
-                        ))}
-                        {results.otherVotes.length > 0 && <div className="border-t my-4"></div>}
-                        {results.otherVotes.map((voteType, index) => (
-                            <div key={voteType.name}>
-                                 <div className="flex justify-between mb-1">
-                                    <span className="text-base font-medium text-slate-800 flex items-center">
-                                         <span className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: pieData.find(p => p.name === voteType.name)?.color || '#ccc'}}></span>
-                                        {voteType.name}
-                                    </span>
-                                    <span className="text-sm font-medium text-slate-600">{voteType.voteCount} votos ({voteType.percentage.toFixed(2)}%)</span>
-                                </div>
-                                 <div className="w-full bg-slate-200 rounded-full h-2.5">
-                                    <div className="h-2.5 rounded-full" style={{ width: `${voteType.percentage}%`, backgroundColor: pieData.find(p => p.name === voteType.name)?.color || '#ccc' }}></div>
+                                <div className="mt-3 w-full bg-slate-200 rounded-full h-2">
+                                    <div className="h-2 rounded-full" style={{ width: `${candidate.percentage}%`, backgroundColor: pieData.find(p => p.name === getCandidateFullName(candidate))?.color || BASE_COLORS[index % BASE_COLORS.length] }}></div>
                                 </div>
                             </div>
                         ))}
+
+                        {results.otherVotes.length > 0 && (
+                            <div className="pt-4 space-y-3">
+                                {results.otherVotes.map((voteType, index) => (
+                                    <div key={voteType.name}>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-base font-medium text-slate-700 flex items-center">
+                                                <span className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: pieData.find(p => p.name === voteType.name)?.color || '#ccc'}}></span>
+                                                {voteType.name}
+                                            </span>
+                                            <span className="text-sm font-medium text-slate-600">{voteType.voteCount} votos ({voteType.percentage.toFixed(2)}%)</span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 rounded-full h-2">
+                                            <div className="h-2 rounded-full" style={{ width: `${voteType.percentage}%`, backgroundColor: pieData.find(p => p.name === voteType.name)?.color || '#ccc' }}></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className="w-full h-64 md:h-80">
