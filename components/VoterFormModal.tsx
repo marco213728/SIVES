@@ -9,7 +9,6 @@ interface VoterFormModalProps {
     voter: User | null;
 }
 
-// FIX: Correct the type to match the object literal. The initial form data does not include an organizationId.
 const initialFormData: Omit<User, 'id' | 'ha_votado' | 'organizationId'> = {
     codigo: '',
     primer_nombre: '',
@@ -18,11 +17,13 @@ const initialFormData: Omit<User, 'id' | 'ha_votado' | 'organizationId'> = {
     segundo_apellido: '',
     curso: '',
     paralelo: '',
-    rol: 'Estudiante' as 'Estudiante',
+    rol: 'Estudiante',
+    email: '',
+    password: '',
 };
 
 const VoterFormModal: React.FC<VoterFormModalProps> = ({ isOpen, onClose, onSubmit, voter }) => {
-    const [formData, setFormData] = useState(initialFormData);
+    const [formData, setFormData] = useState<Omit<User, 'id' | 'ha_votado' | 'organizationId'>>(initialFormData);
     const [error, setError] = useState('');
 
     useEffect(() => {
@@ -36,6 +37,8 @@ const VoterFormModal: React.FC<VoterFormModalProps> = ({ isOpen, onClose, onSubm
                 curso: voter.curso,
                 paralelo: voter.paralelo,
                 rol: voter.rol,
+                email: voter.email || '',
+                password: voter.password || '',
             });
         } else {
             setFormData(initialFormData);

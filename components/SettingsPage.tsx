@@ -13,6 +13,7 @@ interface SettingsPageProps {
     onUpdateUser: (user: User) => void;
     onUpdateOrganization: (settings: Organization) => void;
     onNavigateToDashboard: () => void;
+    onUpdateUserPassword: (userId: string, current: string, newPass: string) => Promise<void>;
 }
 
 type SettingsTab = 'general' | 'organization' | 'appearance' | 'security';
@@ -29,7 +30,7 @@ const SettingsPage: React.FC<SettingsPageProps> = (props) => {
             case 'appearance':
                  return <AppearanceSettings settings={props.organization} onUpdateSettings={props.onUpdateOrganization} />;
             case 'security':
-                return <SecuritySettings />;
+                return <SecuritySettings user={props.user} onUpdateUserPassword={props.onUpdateUserPassword} />;
         }
     }
 

@@ -16,6 +16,9 @@ const ElectionFormModal: React.FC<ElectionFormModalProps> = ({ isOpen, onClose, 
         estado: 'Próxima' as 'Activa' | 'Cerrada' | 'Próxima',
         resultados_publicos: false,
         descripcion: '',
+        permitir_voto_blanco: true,
+        permitir_voto_nulo: true,
+        permitir_voto_otro: true,
     });
     const [error, setError] = useState('');
 
@@ -28,6 +31,9 @@ const ElectionFormModal: React.FC<ElectionFormModalProps> = ({ isOpen, onClose, 
                 estado: election.estado,
                 resultados_publicos: election.resultados_publicos,
                 descripcion: election.descripcion || '',
+                permitir_voto_blanco: election.permitir_voto_blanco ?? true,
+                permitir_voto_nulo: election.permitir_voto_nulo ?? true,
+                permitir_voto_otro: election.permitir_voto_otro ?? true,
             });
         } else {
             setFormData({
@@ -37,6 +43,9 @@ const ElectionFormModal: React.FC<ElectionFormModalProps> = ({ isOpen, onClose, 
                 estado: 'Próxima',
                 resultados_publicos: false,
                 descripcion: '',
+                permitir_voto_blanco: true,
+                permitir_voto_nulo: true,
+                permitir_voto_otro: true,
             });
         }
     }, [election, isOpen]);
@@ -69,6 +78,19 @@ const ElectionFormModal: React.FC<ElectionFormModalProps> = ({ isOpen, onClose, 
         }
     };
 
+    const CheckboxOption: React.FC<{id: string; checked: boolean; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; label: string; description: string}> = ({id, checked, onChange, label, description}) => (
+         <div className="relative flex items-start">
+            <div className="flex items-center h-5">
+                <input id={id} name={id} type="checkbox" checked={checked} onChange={onChange}
+                    className="focus:ring-brand-primary h-4 w-4 text-brand-primary border-gray-300 rounded" />
+            </div>
+            <div className="ml-3 text-sm">
+                <label htmlFor={id} className="font-medium text-gray-700">{label}</label>
+                <p className="text-gray-500">{description}</p>
+            </div>
+        </div>
+    );
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg p-8 shadow-2xl max-w-lg w-full">
@@ -98,25 +120,39 @@ const ElectionFormModal: React.FC<ElectionFormModalProps> = ({ isOpen, onClose, 
                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-primary focus:border-brand-primary sm:text-sm"/>
                         </div>
                     </div>
-                    <div>
-                        <label htmlFor="estado" className="block text-sm font-medium text-gray-700">Estado</label>
-                        <select name="estado" id="estado" value={formData.estado} onChange={handleChange}
-                                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-brand-primary focus:border-brand-primary sm:text-sm rounded-md">
-                            <option>Próxima</option>
-                            <option>Activa</option>
-                            <option>Cerrada</option>
-                        </select>
-                    </div>
-                    <div className="flex items-start">
-                        <div className="flex items-center h-5">
-                            <input id="resultados_publicos" name="resultados_publicos" type="checkbox" checked={formData.resultados_publicos} onChange={handleChange}
-                                className="focus:ring-brand-primary h-4 w-4 text-brand-primary border-gray-300 rounded" />
-                        </div>
-                        <div className="ml-3 text-sm">
-                            <label htmlFor="resultados_publicos" className="font-medium text-gray-700">Resultados Públicos</label>
-                            <p className="text-gray-500">Permitir que los estudiantes vean los resultados después de que la elección haya cerrado.</p>
-                        </div>
-                    </div>
+                     <fieldset className="border p-4 rounded-md space-y-4">
+                        <legend className="text-md font-semibold px-2 text-gray-800">Opciones de Votación</legend>
+                        <CheckboxOption 
+                            id="permitir_voto_blanco"
+                            checked={formData.permitir_voto_blanco}
+                            onChange={handleChange}
+                            label="Permitir Voto en Blanco"
+                            description="Los votantes pueden optar por no seleccionar a ningún candidato."
+                        />
+                        <CheckboxOption 
+                            id="permitir_voto_nulo"
+                            checked={formData.permitir_voto_nulo}
+                            onChange={handleChange}
+                            label="Permitir Voto Nulo"
+                            description="Los votantes pueden anular su voto intencionadamente."
+                        />
+                        <CheckboxOption 
+                            id="permitir_voto_otro"
+                            checked={formData.permitir_voto_otro}
+                            onChange={handleChange}
+                            label="Permitir Otro (Escribir)"
+                            description="Los votantes pueden escribir el nombre de un candidato no listado."
+                        />
+                    </fieldset>
+                    
+                    <CheckboxOption 
+                        id="resultados_publicos"
+                        checked={formData.resultados_publicos}
+                        onChange={handleChange}
+                        label="Resultados Públicos"
+                        description="Permitir que los estudiantes vean los resultados después de que la elección haya cerrado."
+                    />
+
                     {error && <p className="text-sm text-red-600 text-center">{error}</p>}
                     <div className="flex justify-end space-x-4 pt-4">
                         <button type="button" onClick={onClose} className="bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-lg hover:bg-gray-300">

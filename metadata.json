@@ -1,5 +1,5 @@
 {
-  "name": "SIVES - Sistema de Votación Escolar",
+  "name": "copy of SIVES - Sistema de Votación Escolar",
   "description": "A secure, anonymous, and user-friendly digital voting system designed for school elections. It features separate interfaces for student voters and administrators, providing real-time, verifiable results while ensuring voter privacy.",
   "requestFramePermissions": []
 }

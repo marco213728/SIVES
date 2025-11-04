@@ -10,23 +10,51 @@ interface StudentDashboardProps {
   closedElectionsWithPublicResults: Election[];
   candidates: Candidate[];
   votes: Vote[];
-  onVote: (electionId: string, candidateId: string | null, isBlankVote: boolean, writeInName?: string) => void;
+  onVote: (electionId: string, candidateId: string | null, isBlankVote: boolean, writeInName?: string, isNullVote?: boolean) => void;
   lastVoteReceipts: string[];
 }
+const getCandidateFullName = (c: Candidate) => `${c.primer_nombre} ${c.segundo_nombre} ${c.primer_apellido} ${c.segundo_apellido}`.replace(/ +/g, ' ').trim();
 
 const CandidateCard: React.FC<{ candidate: Candidate; onSelect: () => void; isSelected: boolean; }> = ({ candidate, onSelect, isSelected }) => (
-  <div onClick={onSelect} className={`relative bg-white rounded-lg shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-200 cursor-pointer ring-4 ${isSelected ? 'ring-brand-primary' : 'ring-transparent'}`}>
-    {candidate.descripcion && (
-        <div className="absolute top-2 right-2 group">
-            <InformationCircleIcon className="h-6 w-6 text-white bg-black/30 rounded-full p-1"/>
-            <div className="absolute bottom-full right-0 mb-2 w-64 bg-black text-white text-xs rounded py-2 px-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
-                {candidate.descripcion}
-            </div>
+  <div 
+    onClick={onSelect} 
+    className={`bg-white rounded-lg shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-200 cursor-pointer ring-4 ${isSelected ? '' : 'ring-transparent'}`}
+    style={{
+        '--tw-ring-color': isSelected ? (candidate.listColor || 'var(--brand-primary)') : 'transparent',
+      } as React.CSSProperties}
+    >
+    {/* Header for list information */}
+    {candidate.partido_politico && candidate.listColor && (
+        <div style={{ backgroundColor: candidate.listColor }} className="p-2 flex items-center space-x-3 text-white">
+            {candidate.listLogoUrl && (
+                <img src={candidate.listLogoUrl} alt={`${candidate.partido_politico} Logo`} className="h-10 w-10 bg-white rounded-full p-1 shadow-md object-contain" />
+            )}
+            <h4 className="font-bold text-lg tracking-wide uppercase" style={{ textShadow: '1px 1px 3px rgba(0,0,0,0.4)' }}>
+                {candidate.partido_politico}
+            </h4>
         </div>
     )}
-    <img src={candidate.foto_url} alt={`${candidate.nombres} ${candidate.apellido}`} className="w-full h-48 object-cover" />
+    
+    <div className="relative">
+        {candidate.descripcion && (
+            <div className="absolute top-2 right-2 group z-20">
+                <InformationCircleIcon className="h-6 w-6 text-white bg-black/30 rounded-full p-1"/>
+                <div className="absolute bottom-full right-0 mb-2 w-64 bg-black text-white text-xs rounded py-2 px-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
+                    {candidate.descripcion}
+                </div>
+            </div>
+        )}
+
+        {/* Old logo display for candidates without a colored header but with a logo */}
+        {candidate.listLogoUrl && !(candidate.partido_politico && candidate.listColor) && (
+            <img src={candidate.listLogoUrl} alt={`${candidate.partido_politico} Logo`} className="absolute top-2 left-2 h-12 w-12 bg-white rounded-full p-1 shadow-md z-10" />
+        )}
+        
+        <img src={candidate.foto_url} alt={getCandidateFullName(candidate)} className="w-full h-48 object-cover" />
+    </div>
+
     <div className="p-4 text-center">
-      <h3 className="text-xl font-semibold text-slate-800">{`${candidate.nombres} ${candidate.apellido}`}</h3>
+      <h3 className="text-xl font-semibold text-slate-800">{getCandidateFullName(candidate)}</h3>
     </div>
   </div>
 );
@@ -46,7 +74,7 @@ const VoteOptionCard: React.FC<{ title: string; icon: React.ReactNode; onSelect:
 );
 
 const ConfirmationModal: React.FC<{ 
-    selection: { type: 'candidate', data: Candidate } | { type: 'blank' } | { type: 'write-in', name: string };
+    selection: { type: 'candidate', data: Candidate } | { type: 'blank' } | { type: 'null' } | { type: 'write-in', name: string };
     onConfirm: () => void; 
     onCancel: () => void; 
 }> = ({ selection, onConfirm, onCancel }) => {
@@ -54,9 +82,11 @@ const ConfirmationModal: React.FC<{
     const getConfirmationText = () => {
         switch (selection.type) {
             case 'candidate':
-                return <>¿Está seguro que desea votar por <span className="font-bold">{`${selection.data.nombres} ${selection.data.apellido}`}</span>?</>;
+                return <>¿Está seguro que desea votar por <span className="font-bold">{getCandidateFullName(selection.data)}</span>?</>;
             case 'blank':
                 return <>¿Está seguro que desea emitir un <span className="font-bold">Voto en Blanco</span>?</>;
+            case 'null':
+                return <>¿Está seguro que desea emitir un <span className="font-bold">Voto Nulo</span>?</>;
             case 'write-in':
                 return <>¿Está seguro que desea votar por <span className="font-bold">{selection.name}</span> (candidato escrito)?</>;
         }
@@ -143,7 +173,7 @@ const ReceiptItem: React.FC<{receipt: string}> = ({ receipt }) => {
 };
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, votableElections, allActiveElections, closedElectionsWithPublicResults, candidates, votes, onVote, lastVoteReceipts }) => {
-  const [selection, setSelection] = useState<{ type: 'candidate', data: Candidate } | { type: 'blank' } | { type: 'write-in', name: string } | null>(null);
+  const [selection, setSelection] = useState<{ type: 'candidate', data: Candidate } | { type: 'blank' } | { type: 'null' } | { type: 'write-in', name: string } | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [writeInName, setWriteInName] = useState('');
   const [hasAgreed, setHasAgreed] = useState(false);
@@ -231,7 +261,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, votableElecti
   const progressStep = electionsVotedCount + 1;
   const totalSteps = allActiveElections.length;
 
-  const handleSelect = (sel: { type: 'candidate', data: Candidate } | { type: 'blank' } | { type: 'write-in' }) => {
+  const handleSelect = (sel: { type: 'candidate', data: Candidate } | { type: 'blank' } | { type: 'null' } | { type: 'write-in' }) => {
     if (sel.type === 'write-in') {
         setSelection({ ...sel, name: writeInName });
     } else {
@@ -253,13 +283,16 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, votableElecti
 
     switch (selection.type) {
         case 'candidate':
-            onVote(currentElection.id, selection.data.id, false, undefined);
+            onVote(currentElection.id, selection.data.id, false, undefined, false);
             break;
         case 'blank':
-            onVote(currentElection.id, null, true, undefined);
+            onVote(currentElection.id, null, true, undefined, false);
+            break;
+        case 'null':
+            onVote(currentElection.id, null, false, undefined, true);
             break;
         case 'write-in':
-            onVote(currentElection.id, null, false, writeInName);
+            onVote(currentElection.id, null, false, writeInName, false);
             break;
     }
     setShowConfirmation(false);
@@ -284,23 +317,30 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, votableElecti
             isSelected={selection?.type === 'candidate' && selection.data.id === candidate.id}
           />
         ))}
-        <VoteOptionCard title="Voto en Blanco" icon={<BanIcon className="h-24 w-24 text-gray-400"/>} onSelect={() => handleSelect({type: 'blank'})} isSelected={selection?.type === 'blank'} />
-        <VoteOptionCard title="Otro (Escribir)" icon={<PencilAltIcon className="h-24 w-24 text-gray-400"/>} onSelect={() => handleSelect({type: 'write-in'})} isSelected={selection?.type === 'write-in'}>
-            {selection?.type === 'write-in' && (
-                <input 
-                    ref={writeInInputRef}
-                    type="text" 
-                    className="mt-2 w-full px-2 py-1 border border-gray-300 rounded-md" 
-                    placeholder="Nombre del candidato" 
-                    value={writeInName}
-                    onChange={(e) => {
-                        setWriteInName(e.target.value);
-                        setSelection({ type: 'write-in', name: e.target.value });
-                    }}
-                    onClick={e => e.stopPropagation()}
-                />
-            )}
-        </VoteOptionCard>
+        {(currentElection.permitir_voto_blanco ?? true) && (
+            <VoteOptionCard title="Voto en Blanco" icon={<BanIcon className="h-24 w-24 text-gray-400"/>} onSelect={() => handleSelect({type: 'blank'})} isSelected={selection?.type === 'blank'} />
+        )}
+        {(currentElection.permitir_voto_nulo ?? true) && (
+            <VoteOptionCard title="Voto Nulo" icon={<BanIcon className="h-24 w-24 text-gray-400"/>} onSelect={() => handleSelect({type: 'null'})} isSelected={selection?.type === 'null'} />
+        )}
+        {(currentElection.permitir_voto_otro ?? true) && (
+            <VoteOptionCard title="Otro (Escribir)" icon={<PencilAltIcon className="h-24 w-24 text-gray-400"/>} onSelect={() => handleSelect({type: 'write-in'})} isSelected={selection?.type === 'write-in'}>
+                {selection?.type === 'write-in' && (
+                    <input 
+                        ref={writeInInputRef}
+                        type="text" 
+                        className="mt-2 w-full px-2 py-1 border border-gray-300 rounded-md" 
+                        placeholder="Nombre del candidato" 
+                        value={writeInName}
+                        onChange={(e) => {
+                            setWriteInName(e.target.value);
+                            setSelection({ type: 'write-in', name: e.target.value });
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    />
+                )}
+            </VoteOptionCard>
+        )}
       </div>
 
       {selection && (

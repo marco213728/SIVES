@@ -1,5 +1,3 @@
-import { User, Election, Candidate, Vote, Organization } from '../types';
-import { db } from './firebase';
 import {
     collection,
     getDocs,
@@ -7,208 +5,223 @@ import {
     addDoc,
     updateDoc,
     deleteDoc,
-    runTransaction,
+    writeBatch,
     query,
     where,
-    writeBatch
+    runTransaction,
+    arrayUnion,
+    DocumentData,
+    QuerySnapshot
 } from 'firebase/firestore';
-import { organizations as mockOrganizations, users as mockUsers, elections as mockElections, candidates as mockCandidates, votes as mockVotes } from '../mockData';
+import { db } from './firebase';
+import { User, Election, Candidate, Vote, Organization } from '../types';
 
-const getCollectionData = async <T extends {id: string}>(collectionName: string): Promise<T[]> => {
-    try {
-        const col = collection(db, collectionName);
-        const snapshot = await getDocs(col);
-        return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as T));
-    } catch (error) {
-        console.error(`Error fetching ${collectionName}:`, error);
-        // On error (e.g., Firestore not configured), return an empty array
-        return [];
-    }
+// Helper to map snapshot to data array
+const mapSnapshotToData = <T extends { id: string }>(snapshot: QuerySnapshot<DocumentData>): T[] => {
+    return snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+    } as T));
 };
 
 // --- Read Operations ---
-export const getOrganizations = () => getCollectionData<Organization>('organizations');
-export const getUsers = () => getCollectionData<User>('users');
-export const getElections = () => getCollectionData<Election>('elections');
-export const getCandidates = () => getCollectionData<Candidate>('candidates');
-export const getVotes = () => getCollectionData<Vote>('votes');
+export const getOrganizations = async (): Promise<Organization[]> => {
+    const snapshot = await getDocs(collection(db, 'organizations'));
+    return mapSnapshotToData<Organization>(snapshot);
+};
+// Gets ALL users for initial login check
+export const getUsers = async (): Promise<User[]> => {
+    const snapshot = await getDocs(collection(db, 'users'));
+    return mapSnapshotToData<User>(snapshot);
+};
 
-// --- Write Operations ---
+// Scoped reads for organization-specific data
+export const getElections = async (organizationId: string): Promise<Election[]> => {
+    const q = query(collection(db, 'elections'), where('organizationId', '==', organizationId));
+    const snapshot = await getDocs(q);
+    return mapSnapshotToData<Election>(snapshot);
+};
+export const getCandidates = async (organizationId: string): Promise<Candidate[]> => {
+    // Candidates are linked to elections, which are linked to orgs.
+    // This requires a multi-step query or denormalization.
+    // For now, let's assume we fetch all and filter client-side, or have a more direct link.
+    // A better approach would be to get elections for the org first.
+    const elections = await getElections(organizationId);
+    const electionIds = elections.map(e => e.id);
+    if(electionIds.length === 0) return [];
 
-// User/Voter Management
+    const q = query(collection(db, 'candidates'), where('eleccion_id', 'in', electionIds));
+    const snapshot = await getDocs(q);
+    return mapSnapshotToData<Candidate>(snapshot);
+};
+export const getVotes = async (organizationId: string): Promise<Vote[]> => {
+    const q = query(collection(db, 'votes'), where('organizationId', '==', organizationId));
+    const snapshot = await getDocs(q);
+    return mapSnapshotToData<Vote>(snapshot);
+};
+
+// --- SuperAdmin Write Operations ---
+export const createOrganizationAndAdmin = async (orgData: Omit<Organization, 'id'>, adminData: Omit<User, 'id' | 'organizationId' | 'rol' | 'ha_votado'>): Promise<{newOrg: Organization, newAdmin: User}> => {
+    const batch = writeBatch(db);
+
+    // 1. Create Organization
+    const orgRef = doc(collection(db, 'organizations'));
+    const newOrg: Organization = { ...orgData, id: orgRef.id };
+    batch.set(orgRef, orgData);
+
+    // 2. Create Admin for that Organization
+    const adminRef = doc(collection(db, 'users'));
+    const newAdmin: User = {
+        ...adminData,
+        id: adminRef.id,
+        organizationId: newOrg.id,
+        rol: 'Admin',
+        ha_votado: [],
+    };
+    batch.set(adminRef, { ...adminData, organizationId: newOrg.id, rol: 'Admin', ha_votado: [] });
+    
+    await batch.commit();
+
+    return { newOrg, newAdmin };
+}
+
+
+// --- Org Admin Write Operations ---
+
 export const addUser = async (userData: Omit<User, 'id' | 'ha_votado'>, organizationId: string): Promise<User> => {
-    const dataToSave = {
+    const newUserPayload = {
         ...userData,
         organizationId,
         ha_votado: [],
     };
-    const docRef = await addDoc(collection(db, 'users'), dataToSave);
-    return { ...dataToSave, id: docRef.id };
+    const docRef = await addDoc(collection(db, 'users'), newUserPayload);
+    return { ...newUserPayload, id: docRef.id };
 };
-
 export const updateUser = async (updatedUser: User): Promise<User> => {
-    const { id, organizationId, codigo, rol, ha_votado, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, curso, paralelo, email, password } = updatedUser;
-    // Create a plain object to prevent circular structure errors
-    const dataToUpdate = { organizationId, codigo, rol, ha_votado, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, curso, paralelo, email, password };
-    const userRef = doc(db, 'users', id);
+    const userRef = doc(db, 'users', updatedUser.id);
+    const { id, ...dataToUpdate } = updatedUser;
     await updateDoc(userRef, dataToUpdate);
     return updatedUser;
 };
-
 export const deleteUser = async (id: string): Promise<void> => {
     await deleteDoc(doc(db, 'users', id));
 };
-
-export const importVoters = async (importedVoters: Omit<User, 'id' | 'rol' | 'ha_votado'>[], organizationId: string): Promise<User[]> => {
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('organizationId', '==', organizationId));
-    const orgUsersSnapshot = await getDocs(q);
-    const existingCodes = new Set(orgUsersSnapshot.docs.map(d => d.data().codigo));
+export const importVoters = async (importedVoters: Pick<User, 'codigo' | 'primer_nombre' | 'segundo_nombre' | 'primer_apellido' | 'segundo_apellido' | 'curso' | 'paralelo'>[], organizationId: string): Promise<User[]> => {
+    const usersQuery = query(collection(db, 'users'), where('organizationId', '==', organizationId));
+    const querySnapshot = await getDocs(usersQuery);
+    const existingCodes = new Set(querySnapshot.docs.map(doc => doc.data().codigo));
+    const votersToAdd = importedVoters.filter(voter => !existingCodes.has(voter.codigo));
+    if (votersToAdd.length === 0) return [];
 
     const batch = writeBatch(db);
     const newVoters: User[] = [];
-
-    importedVoters.forEach(voter => {
-        if (!existingCodes.has(voter.codigo)) {
-            const newVoterData = {
-                ...voter,
-                organizationId,
-                rol: 'Estudiante' as 'Estudiante',
-                ha_votado: [],
-            };
-            const docRef = doc(collection(db, 'users'));
-            batch.set(docRef, newVoterData);
-            newVoters.push({ ...newVoterData, id: docRef.id });
-        }
+    votersToAdd.forEach(voterData => {
+        const newDocRef = doc(collection(db, 'users'));
+        const userPayload = {
+            ...voterData,
+            organizationId,
+            rol: 'Estudiante' as const,
+            ha_votado: [],
+        };
+        batch.set(newDocRef, userPayload);
+        const newUser: User = { ...userPayload, id: newDocRef.id };
+        newVoters.push(newUser);
     });
-
-    if (newVoters.length > 0) {
-        await batch.commit();
-    }
-    
+    await batch.commit();
     return newVoters;
 };
-
-// Election Management
 export const addElection = async (electionData: Omit<Election, 'id'>, organizationId: string): Promise<Election> => {
-    const dataToSave = { ...electionData, organizationId };
-    const docRef = await addDoc(collection(db, 'elections'), dataToSave);
-    return { ...dataToSave, id: docRef.id };
+    const newElectionPayload = { ...electionData, organizationId };
+    const docRef = await addDoc(collection(db, 'elections'), newElectionPayload);
+    return { ...newElectionPayload, id: docRef.id };
 };
-
 export const updateElection = async (updatedElection: Election): Promise<Election> => {
-    const { id, organizationId, nombre, fecha_inicio, fecha_fin, estado, resultados_publicos, descripcion } = updatedElection;
-    // Create a plain object to prevent circular structure errors
-    const dataToUpdate = { organizationId, nombre, fecha_inicio, fecha_fin, estado, resultados_publicos, descripcion };
-    const electionRef = doc(db, 'elections', id);
+    const electionRef = doc(db, 'elections', updatedElection.id);
+    const { id, ...dataToUpdate } = updatedElection;
     await updateDoc(electionRef, dataToUpdate);
     return updatedElection;
 };
-
 export const deleteElection = async (id: string): Promise<void> => {
     await deleteDoc(doc(db, 'elections', id));
 };
-
-// Candidate Management
 export const addCandidate = async (candidateData: Omit<Candidate, 'id'>): Promise<Candidate> => {
     const docRef = await addDoc(collection(db, 'candidates'), candidateData);
     return { ...candidateData, id: docRef.id };
 };
-
 export const updateCandidate = async (updatedCandidate: Candidate): Promise<Candidate> => {
-    const { id, eleccion_id, nombres, apellido, partido_politico, cargo, foto_url, descripcion } = updatedCandidate;
-    // Create a plain object to prevent circular structure errors
-    const dataToUpdate = { eleccion_id, nombres, apellido, partido_politico, cargo, foto_url, descripcion };
-    const candidateRef = doc(db, 'candidates', id);
+    const candidateRef = doc(db, 'candidates', updatedCandidate.id);
+    const { id, ...dataToUpdate } = updatedCandidate;
     await updateDoc(candidateRef, dataToUpdate);
     return updatedCandidate;
 };
-
 export const deleteCandidate = async (id: string): Promise<void> => {
     await deleteDoc(doc(db, 'candidates', id));
 };
-
-// Voting
-export const addVote = async (userId: string, organizationId: string, electionId: string, candidateId: string | null, writeInName?: string): Promise<{ updatedVote: Vote, updatedUser: User }> => {
-    return runTransaction(db, async (transaction) => {
-        const userRef = doc(db, "users", userId);
-        const userSnap = await transaction.get(userRef);
-
-        if (!userSnap.exists()) {
-            throw new Error("User not found");
-        }
+export const addVote = async (userId: string, organizationId: string, electionId: string, candidateId: string | null, writeInName?: string, isNullVote?: boolean): Promise<{ updatedVote: Vote, updatedUser: User }> => {
+    let finalVote!: Vote;
+    let finalUser!: User;
+    await runTransaction(db, async (transaction) => {
+        const userRef = doc(db, 'users', userId);
+        const userDoc = await transaction.get(userRef);
+        if (!userDoc.exists()) throw new Error("User document does not exist!");
+        const currentUserData = { id: userDoc.id, ...userDoc.data() } as User;
+        if (currentUserData.ha_votado.includes(electionId)) throw new Error("User has already voted in this election.");
         
-        const currentUserData = { id: userSnap.id, ...userSnap.data() } as User;
+        transaction.update(userRef, { ha_votado: arrayUnion(electionId) });
         
-        // Prevent double voting
-        if (currentUserData.ha_votado.includes(electionId)) {
-            throw new Error("User has already voted in this election.");
-        }
-
-        const updatedUser: User = { 
-            ...currentUserData, 
-            ha_votado: [...currentUserData.ha_votado, electionId] 
-        };
-        transaction.update(userRef, { ha_votado: updatedUser.ha_votado });
-
+        const voteRef = doc(collection(db, 'votes'));
+        
+        // Construct the vote data object for Firestore
         const voteData: Omit<Vote, 'id'> = {
             organizationId,
             eleccion_id: electionId,
             user_id: userId,
             candidato_id: candidateId,
-            write_in_name: writeInName,
             fecha_voto: new Date().toISOString(),
-            receipt: `rcpt-${electionId}-${userId}-${Math.random().toString(36).substr(2, 9)}`,
+            receipt: `rcpt-${electionId.substring(0,4)}-${userId.substring(0,4)}-${voteRef.id.substring(0,5)}`,
         };
+        
+        // Only include write_in_name if it has a truthy value (not undefined, null, or empty string)
+        if (writeInName) {
+            voteData.write_in_name = writeInName;
+        }
 
-        const voteRef = doc(collection(db, "votes"));
+        if (isNullVote) {
+            voteData.is_null_vote = true;
+        }
+        
         transaction.set(voteRef, voteData);
 
-        const updatedVote: Vote = { ...voteData, id: voteRef.id };
-
-        return { updatedVote, updatedUser };
+        // Reconstruct the full Vote object for the return value
+        finalUser = { ...currentUserData, ha_votado: [...currentUserData.ha_votado, electionId] };
+        finalVote = { ...voteData, id: voteRef.id };
     });
+    return { updatedVote: finalVote, updatedUser: finalUser };
 };
-
-// Organization Management
 export const updateOrganization = async (updatedOrg: Organization): Promise<Organization> => {
-    const { id, slug, name, logoUrl, primaryColor } = updatedOrg;
-    // Create a plain object to prevent circular structure errors
-    const dataToUpdate = { slug, name, logoUrl, primaryColor };
-    const orgRef = doc(db, 'organizations', id);
+    const orgRef = doc(db, 'organizations', updatedOrg.id);
+    const { id, ...dataToUpdate } = updatedOrg;
     await updateDoc(orgRef, dataToUpdate);
     return updatedOrg;
 };
 
-// --- System ---
-const seedDatabase = async () => {
-    console.log("Seeding database with mock data...");
-    const batch = writeBatch(db);
-    mockOrganizations.forEach(item => batch.set(doc(db, 'organizations', item.id), item));
-    mockUsers.forEach(item => batch.set(doc(db, 'users', item.id), item));
-    mockElections.forEach(item => batch.set(doc(db, 'elections', item.id), item));
-    mockCandidates.forEach(item => batch.set(doc(db, 'candidates', item.id), item));
-    mockVotes.forEach(item => batch.set(doc(db, 'votes', item.id), item));
-    await batch.commit();
-    console.log("Database seeded successfully.");
+export const updateUserPassword = async (userId: string, currentPassword: string, newPassword: string): Promise<void> => {
+    const userRef = doc(db, 'users', userId);
+    
+    await runTransaction(db, async (transaction) => {
+        const userDoc = await transaction.get(userRef);
+        if (!userDoc.exists()) {
+            throw new Error("Usuario no encontrado.");
+        }
+        const userData = userDoc.data();
+        if (userData.password !== currentPassword) {
+            throw new Error("La contraseña actual es incorrecta.");
+        }
+        transaction.update(userRef, { password: newPassword });
+    });
 };
 
 export const resetAllData = async (): Promise<void> => {
-    console.log("Resetting all data...");
-    const collections = ['organizations', 'users', 'elections', 'candidates', 'votes'];
-    try {
-        for (const colName of collections) {
-            const colRef = collection(db, colName);
-            const snapshot = await getDocs(colRef);
-            if(snapshot.empty) continue;
-
-            const batch = writeBatch(db);
-            snapshot.docs.forEach(d => batch.delete(d.ref));
-            await batch.commit();
-            console.log(`Cleared collection: ${colName}`);
-        }
-        await seedDatabase();
-    } catch (error) {
-        console.error("Error resetting data:", error);
-    }
+    console.warn("Data Reset Aborted: Resetting a live Firestore database from the client is disabled.");
+    return Promise.resolve();
 };

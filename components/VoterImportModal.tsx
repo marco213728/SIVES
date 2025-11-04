@@ -5,7 +5,7 @@ import { User } from '../types';
 interface VoterImportModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onImport: (voters: Omit<User, 'id' | 'rol' | 'ha_votado'>[]) => void;
+    onImport: (voters: Pick<User, 'codigo' | 'primer_nombre' | 'segundo_nombre' | 'primer_apellido' | 'segundo_apellido' | 'curso' | 'paralelo'>[]) => void;
 }
 
 const VoterImportModal: React.FC<VoterImportModalProps> = ({ isOpen, onClose, onImport }) => {
@@ -34,7 +34,12 @@ const VoterImportModal: React.FC<VoterImportModalProps> = ({ isOpen, onClose, on
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
-                const text = e.target?.result as string;
+                let text = e.target?.result as string;
+                // Handle UTF-8 BOM character which can be added by some editors like Excel
+                if (text.charCodeAt(0) === 0xFEFF) {
+                    text = text.substring(1);
+                }
+
                 const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
                 
                 if(lines.length < 2) {
@@ -53,21 +58,22 @@ const VoterImportModal: React.FC<VoterImportModalProps> = ({ isOpen, onClose, on
                     headerIndices[h] = index;
                 });
 
+                const sanitize = (s: string | undefined): string => {
+                    if (!s) return '';
+                    // Trim whitespace and remove quotes from start/end
+                    return s.trim().replace(/^"|"$/g, '').trim();
+                }
 
                 const voters = lines.slice(1).map((line, index) => {
                     const data = line.split(',');
-                    if (data.length < requiredHeaders.length) {
-                        console.warn(`Saltando línea ${index + 2}: número de columnas incorrecto.`);
-                        return null;
-                    }
                     
-                    const codigo = data[headerIndices['codigo']]?.trim();
-                    const primer_nombre = data[headerIndices['primer_nombre']]?.trim();
-                    const segundo_nombre = data[headerIndices['segundo_nombre']]?.trim();
-                    const primer_apellido = data[headerIndices['primer_apellido']]?.trim();
-                    const segundo_apellido = data[headerIndices['segundo_apellido']]?.trim();
-                    const curso = data[headerIndices['curso']]?.trim();
-                    const paralelo = data[headerIndices['paralelo']]?.trim();
+                    const codigo = sanitize(data[headerIndices['codigo']]);
+                    const primer_nombre = sanitize(data[headerIndices['primer_nombre']]);
+                    const segundo_nombre = sanitize(data[headerIndices['segundo_nombre']]);
+                    const primer_apellido = sanitize(data[headerIndices['primer_apellido']]);
+                    const segundo_apellido = sanitize(data[headerIndices['segundo_apellido']]);
+                    const curso = sanitize(data[headerIndices['curso']]);
+                    const paralelo = sanitize(data[headerIndices['paralelo']]);
 
                     if (!codigo || !primer_nombre || !primer_apellido || !curso || !paralelo) {
                         console.warn(`Saltando línea ${index + 2}: Faltan datos obligatorios.`);
@@ -75,7 +81,7 @@ const VoterImportModal: React.FC<VoterImportModalProps> = ({ isOpen, onClose, on
                     }
 
                     return { codigo, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, curso, paralelo };
-                }).filter((v): v is Omit<User, 'id' | 'rol' | 'ha_votado'> => v !== null);
+                }).filter((v): v is Pick<User, 'codigo' | 'primer_nombre' | 'segundo_nombre' | 'primer_apellido' | 'segundo_apellido' | 'curso' | 'paralelo'> => v !== null);
                 
                 if (voters.length === 0) {
                     throw new Error("No se encontraron votantes válidos en el archivo.");

@@ -3,10 +3,9 @@ import { LockClosedIcon, UserIcon } from './icons';
 
 interface LoginComponentProps {
   onLogin: (codigo: string, password?: string) => Promise<boolean>;
-  organizationName: string;
 }
 
-const LoginComponent: React.FC<LoginComponentProps> = ({ onLogin, organizationName }) => {
+const LoginComponent: React.FC<LoginComponentProps> = ({ onLogin }) => {
   const [codigo, setCodigo] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -20,33 +19,36 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onLogin, organizationNa
     }
     setLoading(true);
     setError('');
-    const success = await onLogin(codigo, password);
-    if (!success) {
-      setError('Código o contraseña incorrectos. Verifique sus credenciales.');
-    } else {
-      setError('');
+    try {
+      const success = await onLogin(codigo, password);
+      if (!success) {
+        setError('Credenciales incorrectas. Verifique su código y/o contraseña.');
+      }
+    } catch (err) {
+      console.error("Login failed:", err);
+      setError('Ocurrió un error al iniciar sesión. Por favor, intente de nuevo más tarde.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
     <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-xl shadow-lg border border-slate-200">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900">
+          <h2 className="mt-2 text-center text-3xl font-extrabold text-slate-900">
             Bienvenido a SIVES
           </h2>
-           <p className="mt-2 text-center text-md font-medium text-gray-700">
-            {organizationName}
-          </p>
           <p className="mt-2 text-center text-sm text-gray-600">
             Ingrese sus credenciales para continuar.
+            <br />
+            <span className="font-medium">Los estudiantes no necesitan contraseña.</span>
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm space-y-4">
             <div>
-              <label htmlFor="student-code" className="sr-only">
+              <label htmlFor="user-code" className="sr-only">
                 Código de Usuario
               </label>
               <div className="relative">
@@ -54,8 +56,8 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onLogin, organizationNa
                   <UserIcon className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
-                  id="student-code"
-                  name="student-code"
+                  id="user-code"
+                  name="user-code"
                   type="text"
                   autoComplete="username"
                   required
@@ -66,7 +68,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onLogin, organizationNa
                 />
               </div>
             </div>
-             <div>
+            <div>
               <label htmlFor="password" className="sr-only">
                 Contraseña
               </label>
@@ -87,21 +89,17 @@ const LoginComponent: React.FC<LoginComponentProps> = ({ onLogin, organizationNa
               </div>
             </div>
           </div>
-           {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+          {error && <p className="text-sm text-red-600 text-center">{error}</p>}
           <div>
             <button
               type="submit"
               disabled={loading}
               className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-primary-darker focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              
               {loading ? 'Ingresando...' : 'Ingresar'}
             </button>
           </div>
         </form>
-         <div className="text-center text-xs text-gray-500 mt-4">
-            <p>Estudiantes: ingresen solo su código y dejen la contraseña en blanco.</p>
-        </div>
       </div>
     </div>
   );

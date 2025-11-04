@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -7,33 +6,25 @@ import StudentDashboard from './components/StudentDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import SettingsPage from './components/SettingsPage';
 import { User, Election, Candidate, Vote, Organization } from './types';
-import OrganizationSelector from './components/OrganizationSelector';
 import * as apiService from './api/apiService';
+import SuperAdminDashboard from './components/SuperAdminDashboard';
 
 const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 
-// Helper to darken a hex color for hover states
 const darkenColor = (hex: string, percent: number): string => {
-    // Ensure hex is valid
-    if (!/^#[0-9a-f]{6}$/i.test(hex)) {
-        throw new Error('Invalid hex color');
-    }
-
-    let r = parseInt(hex.substring(1, 3), 16);
-    let g = parseInt(hex.substring(3, 5), 16);
-    let b = parseInt(hex.substring(5, 7), 16);
-
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return '#003366'; // Fallback for invalid hex
+    let r = parseInt(hex.substring(1, 3), 16),
+        g = parseInt(hex.substring(3, 5), 16),
+        b = parseInt(hex.substring(5, 7), 16);
     r = Math.floor(r * (100 - percent) / 100);
     g = Math.floor(g * (100 - percent) / 100);
     b = Math.floor(b * (100 - percent) / 100);
-
     const toHex = (c: number) => ('00' + c.toString(16)).slice(-2);
-
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 };
 
-
 const App: React.FC = () => {
+  const [loading, setLoading] = useState(true);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [elections, setElections] = useState<Election[]>([]);
@@ -41,41 +32,54 @@ const App: React.FC = () => {
   const [votes, setVotes] = useState<Vote[]>([]);
   
   const [currentOrganization, setCurrentOrganization] = useState<Organization | null>(null);
-  const [orgLoaded, setOrgLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [lastVoteReceipts, setLastVoteReceipts] = useState<string[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [isHighContrast, setIsHighContrast] = useState(false);
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
-  const timeoutId = useRef<ReturnType<typeof setTimeout>>();
-  const warningTimeoutId = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutId = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warningTimeoutId = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load all data on initial mount
   useEffect(() => {
-    const loadData = async () => {
-        const [orgs, usrs, elects, cands, vts] = await Promise.all([
-            apiService.getOrganizations(),
-            apiService.getUsers(),
-            apiService.getElections(),
-            apiService.getCandidates(),
-            apiService.getVotes()
-        ]);
-        setOrganizations(orgs);
-        setUsers(usrs);
-        setElections(elects);
-        setCandidates(cands);
-        setVotes(vts);
+    const loadInitialData = async () => {
+        try {
+            const [orgs, usrs] = await Promise.all([
+                apiService.getOrganizations(),
+                apiService.getUsers(),
+            ]);
+            setOrganizations(orgs);
+            setUsers(usrs);
+        } catch (error) {
+            console.error("Failed to load initial data:", error);
+        } finally {
+            setLoading(false);
+        }
     };
-    loadData();
+    loadInitialData();
+  }, []);
+  
+  const loadOrgSpecificData = useCallback(async (orgId: string) => {
+    const [elects, cands, vts] = await Promise.all([
+        apiService.getElections(orgId),
+        apiService.getCandidates(orgId),
+        apiService.getVotes(orgId)
+    ]);
+    setElections(elects);
+    setCandidates(cands);
+    setVotes(vts);
   }, []);
 
   const handleLogout = useCallback(() => {
     setCurrentUser(null);
+    setCurrentOrganization(null);
+    // Clear the org slug from the URL to return to the selector screen
+    window.history.replaceState({}, document.title, window.location.pathname);
     setShowSettings(false);
     setShowTimeoutWarning(false);
-    // FIX: Pass the timeout ID to clearTimeout.
+    setElections([]);
+    setCandidates([]);
+    setVotes([]);
     if(timeoutId.current) clearTimeout(timeoutId.current);
-    // FIX: Pass the timeout ID to clearTimeout.
     if(warningTimeoutId.current) clearTimeout(warningTimeoutId.current);
   }, []);
 
@@ -83,15 +87,9 @@ const App: React.FC = () => {
     if(timeoutId.current) clearTimeout(timeoutId.current);
     if(warningTimeoutId.current) clearTimeout(warningTimeoutId.current);
     setShowTimeoutWarning(false);
-
     if (currentUser) {
-       warningTimeoutId.current = setTimeout(() => {
-        setShowTimeoutWarning(true);
-      }, SESSION_TIMEOUT - 60 * 1000);
-
-      timeoutId.current = setTimeout(() => {
-        handleLogout();
-      }, SESSION_TIMEOUT);
+       warningTimeoutId.current = setTimeout(() => setShowTimeoutWarning(true), SESSION_TIMEOUT - 60 * 1000);
+       timeoutId.current = setTimeout(() => handleLogout(), SESSION_TIMEOUT);
     }
   }, [currentUser, handleLogout]);
 
@@ -109,23 +107,9 @@ const App: React.FC = () => {
   }, [currentUser, resetTimeout]);
     
   useEffect(() => {
-    if (organizations.length > 0) {
-        // Default to the first organization and show the login screen directly.
-        setCurrentOrganization(organizations[0]);
-        setOrgLoaded(true);
-    }
-  }, [organizations]);
-
-  useEffect(() => {
     if (currentOrganization) {
         document.documentElement.style.setProperty('--brand-primary', currentOrganization.primaryColor);
-        try {
-            const darkerColor = darkenColor(currentOrganization.primaryColor, 10);
-            document.documentElement.style.setProperty('--brand-primary-darker', darkerColor);
-        } catch (e) {
-            console.error("Failed to darken color, using fallback:", e);
-            document.documentElement.style.setProperty('--brand-primary-darker', '#003366');
-        }
+        document.documentElement.style.setProperty('--brand-primary-darker', darkenColor(currentOrganization.primaryColor, 10));
     } else {
         document.documentElement.style.setProperty('--brand-primary', '#005A9C');
         document.documentElement.style.setProperty('--brand-primary-darker', '#004B8A');
@@ -134,19 +118,16 @@ const App: React.FC = () => {
   }, [currentOrganization, isHighContrast]);
 
   const orgUsers = useMemo(() => users.filter(u => u.organizationId === currentOrganization?.id), [users, currentOrganization]);
-  const orgVotes = useMemo(() => votes.filter(v => v.organizationId === currentOrganization?.id), [votes, currentOrganization]);
   
   const orgElections = useMemo(() => {
     if (!currentOrganization) return [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return elections
-      .filter(e => e.organizationId === currentOrganization.id)
-      .map(election => {
+    return elections.map(election => {
         const startDate = new Date(election.fecha_inicio);
         const endDate = new Date(election.fecha_fin);
         endDate.setHours(23, 59, 59, 999);
-        let newStatus: 'Próxima' | 'Activa' | 'Cerrada';
+        let newStatus: 'Próxima' | 'Activa' | 'Cerrada' = election.estado;
         if (today > endDate) newStatus = 'Cerrada';
         else if (today >= startDate && today <= endDate) newStatus = 'Activa';
         else newStatus = 'Próxima';
@@ -156,146 +137,280 @@ const App: React.FC = () => {
   }, [elections, currentOrganization]);
 
   const handleLogin = async (codigo: string, password?: string): Promise<boolean> => {
-    if (!currentOrganization) return false;
-    const user = users.find(u => u.organizationId === currentOrganization.id && u.codigo.toLowerCase() === codigo.toLowerCase());
-    if (!user) return false;
-    if (user.rol === 'Admin' && (!user.password || user.password !== password)) return false;
+    const lowerCaseCodigo = codigo.toLowerCase();
     
+    // 1. Check for SuperAdmin (global)
+    const superAdmin = users.find(u => u.rol === 'SuperAdmin' && u.codigo.toLowerCase() === lowerCaseCodigo);
+    if (superAdmin) {
+        if (!password || superAdmin.password !== password) return false;
+        setCurrentUser(superAdmin);
+        setCurrentOrganization(null);
+        return true;
+    }
+
+    // 2. Check for Admin or Student
+    const user = users.find(u => u.codigo.toLowerCase() === lowerCaseCodigo && u.rol !== 'SuperAdmin');
+    if (!user) return false; // User not found
+
+    // 3. Validate credentials
+    if (user.rol === 'Admin') {
+      if (!password || user.password !== password) return false;
+    }
+    
+    // 4. Find and set organization
+    if (user.organizationId) {
+        const organization = organizations.find(o => o.id === user.organizationId);
+        if (!organization) {
+            console.error(`Organization not found for user ${user.id}`);
+            return false; // Org not found for user, login fails.
+        }
+        setCurrentOrganization(organization);
+        await loadOrgSpecificData(organization.id);
+    } else {
+        console.error(`User ${user.id} has no organizationId`);
+        return false;
+    }
+
+    // 5. Set user and finish
     setCurrentUser(user);
     if (user.rol === 'Estudiante') setLastVoteReceipts([]);
     setShowSettings(false);
     return true;
   };
 
-  const handleVote = async (electionId: string, candidateId: string | null, isBlankVote: boolean, writeInName?: string) => {
+  const handleVote = async (electionId: string, candidateId: string | null, isBlankVote: boolean, writeInName?: string, isNullVote?: boolean) => {
     if (!currentUser || !currentOrganization) return;
-    const { updatedVote, updatedUser } = await apiService.addVote(currentUser.id, currentOrganization.id, electionId, candidateId, writeInName);
-    
-    setVotes(prev => [...prev, updatedVote]);
-    setUsers(prevUsers => prevUsers.map(u => u.id === currentUser.id ? updatedUser : u));
-    setCurrentUser(updatedUser);
-    setLastVoteReceipts(prev => [...prev, updatedVote.receipt]);
-  };
-
-  const handleAddElection = async (election: Omit<Election, 'id'>) => {
-    if (!currentOrganization) return;
-    const newElection = await apiService.addElection(election, currentOrganization.id);
-    setElections(prev => [...prev, newElection]);
-  };
-  const handleUpdateElection = async (election: Election) => {
-    const updatedElection = await apiService.updateElection(election);
-    setElections(prev => prev.map(e => e.id === updatedElection.id ? updatedElection : e));
-  };
-  const handleDeleteElection = async (id: string) => {
-    await apiService.deleteElection(id);
-    setElections(prev => prev.filter(e => e.id !== id));
-  };
-
-  const handleAddCandidate = async (candidate: Omit<Candidate, 'id'>) => {
-    const newCandidate = await apiService.addCandidate(candidate);
-    setCandidates(prev => [...prev, newCandidate]);
-  };
-  const handleUpdateCandidate = async (candidate: Candidate) => {
-    const updatedCandidate = await apiService.updateCandidate(candidate);
-    setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
-  };
-  const handleDeleteCandidate = async (id: string) => {
-    await apiService.deleteCandidate(id);
-    setCandidates(prev => prev.filter(c => c.id !== id));
-  };
-
-  const handleAddVoter = async (voter: Omit<User, 'id' | 'ha_votado'>) => {
-    if (!currentOrganization) return;
-    const newVoter = await apiService.addUser(voter, currentOrganization.id);
-    setUsers(prev => [...prev, newVoter]);
-  };
-  const handleUpdateUser = async (user: User) => {
-    const updatedUser = await apiService.updateUser(user);
-    setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-    if (currentUser && currentUser.id === updatedUser.id) {
-        setCurrentUser(updatedUser);
+    try {
+      const { updatedVote, updatedUser } = await apiService.addVote(currentUser.id, currentOrganization.id, electionId, candidateId, writeInName, isNullVote);
+      setVotes(prev => [...prev, updatedVote]);
+      setUsers(prevUsers => prevUsers.map(u => u.id === currentUser.id ? updatedUser : u));
+      setCurrentUser(updatedUser);
+      setLastVoteReceipts(prev => [...prev, updatedVote.receipt]);
+    } catch (error) {
+      console.error("Error submitting vote:", error);
+      alert(`Ocurrió un error al registrar su voto: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
-  const handleDeleteVoter = async (id: string) => {
-    await apiService.deleteUser(id);
-    setUsers(prev => prev.filter(u => u.id !== id));
+  
+  const handleCreateOrgAndAdmin = async (org: Omit<Organization, 'id'>, admin: Omit<User, 'id' | 'organizationId' | 'rol' | 'ha_votado'>) => {
+      try {
+        const { newOrg, newAdmin } = await apiService.createOrganizationAndAdmin(org, admin);
+        setOrganizations(prev => [...prev, newOrg]);
+        setUsers(prev => [...prev, newAdmin]);
+      } catch (error) {
+        console.error("Error creating organization and admin:", error);
+        alert(`Ocurrió un error al crear la organización: ${error instanceof Error ? error.message : String(error)}`);
+      }
   };
 
-  const handleImportVoters = async (importedVoters: Omit<User, 'id' | 'rol' | 'ha_votado'>[]) => {
+  // Admin operations
+  const handleAddElection = async (electionData: Omit<Election, 'id'>) => {
     if (!currentOrganization) return;
-    const newVoters = await apiService.importVoters(importedVoters, currentOrganization.id);
-    setUsers(prev => [...prev, ...newVoters]);
+    try {
+        const newElection = await apiService.addElection(electionData, currentOrganization.id);
+        setElections(prev => [...prev, newElection]);
+    } catch (error) {
+        console.error("Error adding election:", error);
+        alert(`Ocurrió un error al agregar la elección: ${error instanceof Error ? error.message : String(error)}`);
+    }
   };
 
-  const handleUpdateOrgSettings = async (org: Organization) => {
-    const updatedOrg = await apiService.updateOrganization(org);
-    setOrganizations(prev => prev.map(o => o.id === updatedOrg.id ? updatedOrg : o));
-    setCurrentOrganization(updatedOrg);
+  const handleUpdateElection = async (electionData: Election) => {
+    try {
+        const updatedElection = await apiService.updateElection(electionData);
+        setElections(prev => prev.map(e => e.id === updatedElection.id ? updatedElection : e));
+    } catch (error) {
+        console.error("Error updating election:", error);
+        alert(`Ocurrió un error al actualizar la elección: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleDeleteElection = async (id: string) => {
+    try {
+        await apiService.deleteElection(id);
+        setElections(prev => prev.filter(e => e.id !== id));
+    } catch (error) {
+        console.error("Error deleting election:", error);
+        alert(`Ocurrió un error al eliminar la elección: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleAddCandidate = async (candidateData: Omit<Candidate, 'id'>) => {
+    try {
+        const newCandidate = await apiService.addCandidate(candidateData);
+        setCandidates(prev => [...prev, newCandidate]);
+    } catch (error) {
+        console.error("Error adding candidate:", error);
+        alert(`Ocurrió un error al agregar el candidato: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleUpdateCandidate = async (candidateData: Candidate) => {
+    try {
+        const updatedCandidate = await apiService.updateCandidate(candidateData);
+        setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
+    } catch (error) {
+        console.error("Error updating candidate:", error);
+        alert(`Ocurrió un error al actualizar el candidato: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleDeleteCandidate = async (id: string) => {
+    try {
+        await apiService.deleteCandidate(id);
+        setCandidates(prev => prev.filter(c => c.id !== id));
+    } catch (error) {
+        console.error("Error deleting candidate:", error);
+        alert(`Ocurrió un error al eliminar el candidato: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleAddUser = async (userData: Omit<User, 'id' | 'ha_votado'>, organizationId: string) => {
+    try {
+        const newUser = await apiService.addUser(userData, organizationId);
+        setUsers(prev => [...prev, newUser]);
+    } catch (error) {
+        console.error("Error adding user:", error);
+        alert(`Ocurrió un error al agregar el usuario: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleUpdateUser = async (voterData: User) => {
+    try {
+        const updatedUser = await apiService.updateUser(voterData);
+        setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+    } catch (error) {
+        console.error("Error updating user:", error);
+        alert(`Ocurrió un error al actualizar el usuario: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    try {
+        await apiService.deleteUser(id);
+        setUsers(prev => prev.filter(u => u.id !== id));
+    } catch (error) {
+        console.error("Error deleting user:", error);
+        alert(`Ocurrió un error al eliminar el usuario: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleImportUsers = async (votersData: Pick<User, 'codigo' | 'primer_nombre' | 'segundo_nombre' | 'primer_apellido' | 'segundo_apellido' | 'curso' | 'paralelo'>[], organizationId: string) => {
+    try {
+      const newUsers = await apiService.importVoters(votersData, organizationId);
+      setUsers(prev => [...prev, ...newUsers]);
+    } catch (error) {
+        console.error("Failed to import voters:", error);
+        alert(`Error al importar votantes: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  // Settings operations
+  const handleUpdateOrganization = async (orgData: Organization) => {
+    try {
+        const updatedOrg = await apiService.updateOrganization(orgData);
+        setOrganizations(prev => prev.map(o => o.id === updatedOrg.id ? updatedOrg : o));
+        if (currentOrganization?.id === updatedOrg.id) {
+          setCurrentOrganization(updatedOrg);
+        }
+    } catch (error) {
+        console.error("Error updating organization settings:", error);
+        alert(`Ocurrió un error al actualizar la configuración: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleUpdateCurrentUser = async (userData: User) => {
+    try {
+        const updatedUser = await apiService.updateUser(userData);
+        setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+        if (currentUser?.id === updatedUser.id) {
+          setCurrentUser(updatedUser);
+        }
+    } catch (error) {
+        console.error("Error updating current user:", error);
+        alert(`Ocurrió un error al actualizar su perfil: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleUpdateUserPassword = async (userId: string, currentPassword: string, newPassword: string) => {
+    try {
+        await apiService.updateUserPassword(userId, currentPassword, newPassword);
+        // We also need to update the password in the local state for the current session
+        const updatedUser = users.find(u => u.id === userId);
+        if (updatedUser) {
+            const userWithNewPass = {...updatedUser, password: newPassword};
+            setUsers(prev => prev.map(u => u.id === userId ? userWithNewPass : u));
+            if (currentUser?.id === userId) {
+                setCurrentUser(userWithNewPass);
+            }
+        }
+        alert("Contraseña actualizada con éxito.");
+    } catch (error) {
+        console.error("Error updating password:", error);
+        alert(`Ocurrió un error al actualizar la contraseña: ${error instanceof Error ? error.message : String(error)}`);
+        throw error; // re-throw to let the component know it failed
+    }
   };
 
   const activeElections = useMemo(() => orgElections.filter(e => e.estado === 'Activa'), [orgElections]);
-  
   const votableElectionsForCurrentUser = useMemo(() => {
       if (!currentUser || currentUser.rol !== 'Estudiante') return [];
       return activeElections.filter(e => !currentUser.ha_votado.includes(e.id));
   }, [currentUser, activeElections]);
 
   const renderContent = () => {
-    if (!orgLoaded) return <div className="text-center py-12 text-gray-600">Loading...</div>;
+    if (loading) return <div className="text-center py-12 text-gray-600">Loading...</div>;
+    
     if (currentUser) {
-      if (!currentOrganization) {
-        handleLogout();
-        return <div className="text-center py-12 text-red-500">Error: User session is invalid. Logging out.</div>;
-      }
-      if (currentUser.rol === 'Admin') {
-        if (showSettings) {
-          return <SettingsPage 
-            user={currentUser}
-            organization={currentOrganization}
-            onUpdateUser={handleUpdateUser}
-            onUpdateOrganization={handleUpdateOrgSettings}
-            onNavigateToDashboard={() => setShowSettings(false)}
-          />
+        if (currentUser.rol === 'SuperAdmin') {
+            return <SuperAdminDashboard 
+                organizations={organizations}
+                users={users}
+                onCreateOrgAndAdmin={handleCreateOrgAndAdmin}
+                onUpdateOrganization={handleUpdateOrganization}
+                onAddUser={handleAddUser}
+                onUpdateUser={handleUpdateUser}
+                onDeleteUser={handleDeleteUser}
+                onImportUsers={handleImportUsers}
+            />;
         }
-        return (
-          <AdminDashboard 
-            organization={currentOrganization}
-            users={orgUsers}
-            elections={orgElections}
-            candidates={candidates}
-            votes={orgVotes}
-            onAddElection={handleAddElection}
-            onUpdateElection={handleUpdateElection}
-            onDeleteElection={handleDeleteElection}
-            onAddCandidate={handleAddCandidate}
-            onUpdateCandidate={handleUpdateCandidate}
-            onDeleteCandidate={handleDeleteCandidate}
-            onAddVoter={handleAddVoter}
-            onUpdateVoter={handleUpdateUser}
-            onDeleteVoter={handleDeleteVoter}
-            onImportVoters={handleImportVoters}
-          />
-        );
-      }
-      return (
-        <StudentDashboard 
-          user={currentUser} 
-          votableElections={votableElectionsForCurrentUser}
-          allActiveElections={activeElections}
-          closedElectionsWithPublicResults={orgElections.filter(e => e.estado === 'Cerrada' && e.resultados_publicos)}
-          candidates={candidates}
-          votes={orgVotes}
-          onVote={handleVote}
-          lastVoteReceipts={lastVoteReceipts}
-        />
-      );
-    } else {
-      if (currentOrganization) {
-        return <LoginComponent onLogin={handleLogin} organizationName={currentOrganization.name} />;
-      } else {
-        return <OrganizationSelector organizations={organizations} />;
-      }
+
+        if (!currentOrganization) {
+            handleLogout();
+            return <div className="text-center py-12 text-red-500">Error: User session is invalid. Logging out.</div>;
+        }
+
+        if (currentUser.rol === 'Admin') {
+          if (showSettings) {
+            return <SettingsPage user={currentUser} organization={currentOrganization} onUpdateUser={handleUpdateCurrentUser} onUpdateOrganization={handleUpdateOrganization} onNavigateToDashboard={() => setShowSettings(false)} onUpdateUserPassword={handleUpdateUserPassword} />
+          }
+          return <AdminDashboard 
+            organization={currentOrganization} 
+            users={orgUsers} 
+            elections={orgElections} 
+            candidates={candidates} 
+            votes={votes} 
+            onAddElection={handleAddElection} 
+            onUpdateElection={handleUpdateElection} 
+            onDeleteElection={handleDeleteElection} 
+            onAddCandidate={handleAddCandidate} 
+            onUpdateCandidate={handleUpdateCandidate} 
+            onDeleteCandidate={handleDeleteCandidate} 
+            onAddVoter={(voterData) => handleAddUser(voterData, currentOrganization.id)} 
+            onUpdateVoter={handleUpdateUser} 
+            onDeleteVoter={handleDeleteUser} 
+            onImportVoters={(voterData) => handleImportUsers(voterData, currentOrganization.id)} 
+          />;
+        }
+
+        if (currentUser.rol === 'Estudiante') {
+          return <StudentDashboard user={currentUser} votableElections={votableElectionsForCurrentUser} allActiveElections={activeElections} closedElectionsWithPublicResults={orgElections.filter(e => e.estado === 'Cerrada' && e.resultados_publicos)} candidates={candidates} votes={votes} onVote={handleVote} lastVoteReceipts={lastVoteReceipts} />;
+        }
+
+        return null;
     }
+
+    return <LoginComponent onLogin={handleLogin} />;
   };
   
   return (
@@ -306,14 +421,7 @@ const App: React.FC = () => {
           <button onClick={resetTimeout} className="ml-4 underline font-bold">Extender Sesión</button>
         </div>
       )}
-      <Header 
-        user={currentUser} 
-        onLogout={handleLogout} 
-        organization={currentOrganization} 
-        onNavigateToSettings={() => setShowSettings(true)}
-        isHighContrast={isHighContrast}
-        onToggleHighContrast={() => setIsHighContrast(prev => !prev)}
-      />
+      <Header user={currentUser} onLogout={handleLogout} organization={currentOrganization} onNavigateToSettings={() => setShowSettings(true)} isHighContrast={isHighContrast} onToggleHighContrast={() => setIsHighContrast(prev => !prev)} />
       <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-10">
         {renderContent()}
       </main>

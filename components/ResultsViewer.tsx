@@ -1,20 +1,28 @@
-
 import React, { useMemo } from 'react';
 import { Election, Candidate, Vote } from '../types';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface ResultsViewerProps {
     election: Election;
     candidates: Candidate[];
     votes: Vote[];
 }
+const getCandidateFullName = (c: Candidate) => `${c.primer_nombre} ${c.segundo_nombre} ${c.primer_apellido} ${c.segundo_apellido}`.replace(/ +/g, ' ').trim();
+
+const BASE_COLORS = ['#3b82f6', '#10b981', '#f97316', '#ef4444', '#8b5cf6', '#ec4899', '#f59e0b', '#64748b'];
+const OTHER_VOTE_COLORS: {[key: string]: string} = {
+    'Votos en Blanco': '#a0aec0',
+    'Votos Nulos': '#f56565',
+    'Votos Escritos': '#ecc94b',
+};
 
 const ResultsViewer: React.FC<ResultsViewerProps> = ({ election, candidates, votes }) => {
     
-    const results = useMemo(() => {
+    const { results, pieData } = useMemo(() => {
         const electionVotes = votes.filter(v => v.eleccion_id === election.id);
         const totalVotes = electionVotes.length;
 
-        const candidateVotes: { [key: number]: number } = {};
+        const candidateVotes: { [key: string]: number } = {};
         candidates.forEach(c => {
             if (c.eleccion_id === election.id) {
                 candidateVotes[c.id] = 0;
@@ -22,6 +30,7 @@ const ResultsViewer: React.FC<ResultsViewerProps> = ({ election, candidates, vot
         });
 
         let blankVotes = 0;
+        let nullVotes = 0;
         const writeInVotes: { [key: string]: number } = {};
 
         electionVotes.forEach(vote => {
@@ -32,7 +41,10 @@ const ResultsViewer: React.FC<ResultsViewerProps> = ({ election, candidates, vot
             } else if (vote.write_in_name) {
                 const name = vote.write_in_name.trim().toLowerCase();
                 writeInVotes[name] = (writeInVotes[name] || 0) + 1;
-            } else {
+            } else if (vote.is_null_vote) {
+                nullVotes++;
+            }
+            else {
                 blankVotes++;
             }
         });
@@ -42,7 +54,7 @@ const ResultsViewer: React.FC<ResultsViewerProps> = ({ election, candidates, vot
             .map(candidate => ({
                 ...candidate,
                 voteCount: candidateVotes[candidate.id] || 0,
-                percentage: totalVotes > 0 ? ((candidateVotes[candidate.id] || 0) / totalVotes * 100).toFixed(2) : '0.00'
+                percentage: totalVotes > 0 ? ((candidateVotes[candidate.id] || 0) / totalVotes * 100) : 0
             }))
             .sort((a, b) => b.voteCount - a.voteCount);
 
@@ -50,76 +62,124 @@ const ResultsViewer: React.FC<ResultsViewerProps> = ({ election, candidates, vot
             .map(([name, voteCount]) => ({
                 name,
                 voteCount,
-                percentage: totalVotes > 0 ? (voteCount / totalVotes * 100).toFixed(2) : '0.00'
+                percentage: totalVotes > 0 ? (voteCount / totalVotes * 100) : 0
             }))
             .sort((a, b) => b.voteCount - a.voteCount);
-            
+        
+        const otherVotes = [
+            { name: 'Votos en Blanco', voteCount: blankVotes, percentage: totalVotes > 0 ? (blankVotes / totalVotes * 100) : 0 },
+            { name: 'Votos Nulos', voteCount: nullVotes, percentage: totalVotes > 0 ? (nullVotes / totalVotes * 100) : 0 },
+            ...sortedWriteIns.map(wi => ({ name: `Escrito: ${wi.name}`, voteCount: wi.voteCount, percentage: wi.percentage }))
+        ].filter(v => v.voteCount > 0);
+
+        // Prepare data for Pie Chart
+        const currentPieData = [
+            ...sortedCandidates.map((c, index) => ({
+                name: getCandidateFullName(c),
+                value: c.voteCount,
+                color: c.listColor || BASE_COLORS[index % BASE_COLORS.length]
+            })),
+            ...otherVotes.map((v, index) => ({
+                name: v.name,
+                value: v.voteCount,
+                color: OTHER_VOTE_COLORS[v.name.startsWith('Escrito') ? 'Votos Escritos' : v.name] || BASE_COLORS[(sortedCandidates.length + index) % BASE_COLORS.length]
+            }))
+        ].filter(d => d.value > 0);
+
         return {
-            totalVotes,
-            sortedCandidates,
-            blankVotes,
-            blankPercentage: totalVotes > 0 ? (blankVotes / totalVotes * 100).toFixed(2) : '0.00',
-            sortedWriteIns
+            results: {
+                totalVotes,
+                sortedCandidates,
+                otherVotes,
+            },
+            pieData: currentPieData
         };
     }, [election, candidates, votes]);
 
-    return (
-        <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-2xl font-bold text-slate-800 mb-4">{election.nombre}</h3>
-            <p className="text-gray-600 mb-6">Total de votos: <span className="font-bold">{results.totalVotes}</span></p>
+    const CustomTooltip = ({ active, payload }: any) => {
+        if (active && payload && payload.length) {
+            const data = payload[0];
+            const percentage = ((data.value / results.totalVotes) * 100).toFixed(2);
+            return (
+                <div className="bg-white p-2 border border-gray-300 rounded shadow-lg">
+                    <p className="font-bold">{`${data.payload.name}`}</p>
+                    <p>{`Votos: ${data.value} (${percentage}%)`}</p>
+                </div>
+            );
+        }
+        return null;
+    };
 
+    return (
+        <div className="bg-white p-6 rounded-lg shadow-md border border-slate-200">
+            <div className="flex justify-between items-start mb-4">
+                <div>
+                    <h3 className="text-2xl font-bold text-slate-800">{election.nombre}</h3>
+                    <p className="text-gray-600">Total de votos: <span className="font-bold">{results.totalVotes}</span></p>
+                </div>
+                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    election.estado === 'Activa' ? 'bg-green-100 text-green-800' : election.estado === 'Cerrada' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                }`}>{election.estado}</span>
+            </div>
+            
             {results.totalVotes === 0 ? (
                 <p className="text-center text-gray-500 py-8">Aún no hay votos para esta elección.</p>
             ) : (
-                <div className="space-y-6">
-                    <div>
-                        <h4 className="text-lg font-semibold text-gray-800 mb-3">Resultados de Candidatos</h4>
-                        <div className="space-y-3">
-                            {results.sortedCandidates.map(candidate => (
-                                <div key={candidate.id} className="w-full">
-                                    <div className="flex justify-between mb-1">
-                                        <span className="text-base font-medium text-slate-800">{candidate.nombres} {candidate.apellido}</span>
-                                        <span className="text-sm font-medium text-slate-800">{candidate.voteCount} votos ({candidate.percentage}%)</span>
-                                    </div>
-                                    <div className="w-full bg-slate-200 rounded-full h-5">
-                                        <div className="bg-brand-primary h-5 rounded-full" style={{ width: `${candidate.percentage}%` }}></div>
-                                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                    <div className="space-y-4">
+                        {results.sortedCandidates.map((candidate, index) => (
+                            <div key={candidate.id}>
+                                <div className="flex justify-between mb-1">
+                                    <span className="text-base font-medium text-slate-800 flex items-center">
+                                        <span className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: pieData.find(p => p.name === getCandidateFullName(candidate))?.color || BASE_COLORS[index % BASE_COLORS.length]}}></span>
+                                        {getCandidateFullName(candidate)}
+                                    </span>
+                                    <span className="text-sm font-medium text-slate-600">{candidate.voteCount} votos ({candidate.percentage.toFixed(2)}%)</span>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                    
-                    <div className="border-t pt-4">
-                        <h4 className="text-lg font-semibold text-gray-800 mb-3">Otros</h4>
-                         <div className="w-full">
-                            <div className="flex justify-between mb-1">
-                                <span className="text-base font-medium text-gray-700">Votos en Blanco</span>
-                                <span className="text-sm font-medium text-gray-700">{results.blankVotes} votos ({results.blankPercentage}%)</span>
+                                <div className="w-full bg-slate-200 rounded-full h-2.5">
+                                    <div className="h-2.5 rounded-full" style={{ width: `${candidate.percentage}%`, backgroundColor: pieData.find(p => p.name === getCandidateFullName(candidate))?.color || BASE_COLORS[index % BASE_COLORS.length] }}></div>
+                                </div>
                             </div>
-                            <div className="w-full bg-slate-200 rounded-full h-5">
-                                <div className="bg-slate-400 h-5 rounded-full" style={{ width: `${results.blankPercentage}%` }}></div>
+                        ))}
+                        {results.otherVotes.length > 0 && <div className="border-t my-4"></div>}
+                        {results.otherVotes.map((voteType, index) => (
+                            <div key={voteType.name}>
+                                 <div className="flex justify-between mb-1">
+                                    <span className="text-base font-medium text-slate-800 flex items-center">
+                                         <span className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: pieData.find(p => p.name === voteType.name)?.color || '#ccc'}}></span>
+                                        {voteType.name}
+                                    </span>
+                                    <span className="text-sm font-medium text-slate-600">{voteType.voteCount} votos ({voteType.percentage.toFixed(2)}%)</span>
+                                </div>
+                                 <div className="w-full bg-slate-200 rounded-full h-2.5">
+                                    <div className="h-2.5 rounded-full" style={{ width: `${voteType.percentage}%`, backgroundColor: pieData.find(p => p.name === voteType.name)?.color || '#ccc' }}></div>
+                                </div>
                             </div>
-                        </div>
+                        ))}
                     </div>
 
-                    {results.sortedWriteIns.length > 0 && (
-                        <div className="border-t pt-4">
-                            <h4 className="text-lg font-semibold text-gray-800 mb-3">Votos Escritos</h4>
-                             <div className="space-y-3">
-                                {results.sortedWriteIns.map(writeIn => (
-                                    <div key={writeIn.name} className="w-full">
-                                        <div className="flex justify-between mb-1">
-                                            <span className="text-base font-medium text-gray-700 capitalize">{writeIn.name}</span>
-                                            <span className="text-sm font-medium text-gray-700">{writeIn.voteCount} votos ({writeIn.percentage}%)</span>
-                                        </div>
-                                        <div className="w-full bg-slate-200 rounded-full h-5">
-                                            <div className="bg-yellow-500 h-5 rounded-full" style={{ width: `${writeIn.percentage}%` }}></div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                    <div className="w-full h-64 md:h-80">
+                        <ResponsiveContainer>
+                            <PieChart>
+                                <Pie
+                                    data={pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={100}
+                                    fill="#8884d8"
+                                    paddingAngle={2}
+                                    dataKey="value"
+                                    nameKey="name"
+                                >
+                                    {pieData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                </Pie>
+                                <Tooltip content={<CustomTooltip />} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
             )}
         </div>

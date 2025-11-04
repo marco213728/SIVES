@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { User, Election, Candidate, Vote, Organization } from '../types';
-import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ChartBarIcon, ClipboardListIcon, UploadIcon, UserIcon, ShieldCheckIcon, SearchIcon, ArrowUpIcon, ArrowDownIcon, InformationCircleIcon } from './icons';
+import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ChartBarIcon, ClipboardListIcon, UploadIcon, UserIcon, ShieldCheckIcon, SearchIcon, ArrowUpIcon, ArrowDownIcon, InformationCircleIcon, DownloadIcon } from './icons';
 import ElectionFormModal from './ElectionFormModal';
 import CandidateFormModal from './CandidateFormModal';
 import VoterFormModal from './VoterFormModal';
@@ -8,6 +8,9 @@ import VoterImportModal from './VoterImportModal';
 import ResultsViewer from './ResultsViewer';
 import AuditLog from './AuditLog';
 import ElectionOverviewModal from './ElectionOverviewModal';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
 
 interface AdminDashboardProps {
     organization: Organization;
@@ -24,10 +27,12 @@ interface AdminDashboardProps {
     onAddVoter: (voter: Omit<User, 'id' | 'ha_votado'>) => void;
     onUpdateVoter: (voter: User) => void;
     onDeleteVoter: (id: string) => void;
-    onImportVoters: (voters: Omit<User, 'id' | 'rol' | 'ha_votado'>[]) => void;
+    onImportVoters: (voters: Pick<User, 'codigo' | 'primer_nombre' | 'segundo_nombre' | 'primer_apellido' | 'segundo_apellido' | 'curso' | 'paralelo'>[]) => void;
 }
 
 type Tab = 'results' | 'audit' | 'elections' | 'candidates' | 'voters';
+
+const getCandidateFullName = (c: Candidate) => `${c.primer_nombre} ${c.segundo_nombre} ${c.primer_apellido} ${c.segundo_apellido}`.replace(/ +/g, ' ').trim();
 
 const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     const [activeTab, setActiveTab] = useState<Tab>('results');
@@ -92,7 +97,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
         setIsVoterModalOpen(false);
     };
     
-    const handleImportSubmit = (voters: Omit<User, 'id' | 'rol' | 'ha_votado'>[]) => {
+    const handleImportSubmit = (voters: Pick<User, 'codigo' | 'primer_nombre' | 'segundo_nombre' | 'primer_apellido' | 'segundo_apellido' | 'curso' | 'paralelo'>[]) => {
         props.onImportVoters(voters);
         setIsImportModalOpen(false);
     }
@@ -109,7 +114,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                 return <ManageVoters users={props.users} openModal={openVoterModal} onDelete={props.onDeleteVoter} openImportModal={() => setIsImportModalOpen(true)} />;
             case 'results':
             default:
-                return <ViewResults elections={props.elections} candidates={props.candidates} votes={props.votes} />;
+                return <ViewResults elections={props.elections} candidates={props.candidates} votes={props.votes} organizationName={props.organization.name} />;
         }
     };
 
@@ -159,15 +164,85 @@ const TabButton: React.FC<{ icon: React.ReactNode, label: string, isActive: bool
     </button>
 );
 
-const ViewResults: React.FC<{ elections: Election[], candidates: Candidate[], votes: Vote[] }> = ({ elections, candidates, votes }) => (
-    <div className="space-y-8">
-        {elections.length > 0 ? (
-            elections.map(e => <ResultsViewer key={e.id} election={e} candidates={candidates} votes={votes} />)
-        ) : (
-            <p className="text-center text-gray-500 py-8">No hay elecciones para mostrar resultados.</p>
-        )}
-    </div>
-);
+const ViewResults: React.FC<{ elections: Election[], candidates: Candidate[], votes: Vote[], organizationName: string }> = ({ elections, candidates, votes, organizationName }) => {
+    const [isDownloading, setIsDownloading] = useState(false);
+
+    const handleDownload = async () => {
+        const resultsContainer = document.getElementById('results-container');
+        if (!resultsContainer) {
+            console.error("Results container not found");
+            return;
+        }
+        setIsDownloading(true);
+        try {
+            const canvas = await html2canvas(resultsContainer, { 
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#f8fafc' // same as bg-slate-50
+            });
+            const imgData = canvas.toDataURL('image/png');
+            
+            // A4 page is 210mm x 297mm. We'll use this aspect ratio.
+            const pdf = new jsPDF({
+                orientation: 'p',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const canvasAspectRatio = canvas.width / canvas.height;
+            const pdfAspectRatio = pdfWidth / pdfHeight;
+            
+            let imgWidth = pdfWidth;
+            let imgHeight = pdfWidth / canvasAspectRatio;
+
+            // If image is too tall for one page, we might need to split it
+            // For now, let's fit it to one page.
+            if(imgHeight > pdfHeight) {
+                imgHeight = pdfHeight;
+                imgWidth = pdfHeight * canvasAspectRatio;
+            }
+
+            const x = (pdfWidth - imgWidth) / 2;
+            const y = 15; // margin top
+
+            pdf.setFontSize(10);
+            pdf.text(`Reporte de Resultados - ${organizationName}`, pdfWidth / 2, 10, { align: 'center' });
+            pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+            pdf.save(`resultados-${organizationName.toLowerCase().replace(/\s/g, '-')}.pdf`);
+
+        } catch (error) {
+            console.error("Error generating PDF:", error);
+            alert("Hubo un error al generar el PDF.");
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+    
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold">Resultados de Elecciones</h3>
+                <button 
+                    onClick={handleDownload}
+                    disabled={isDownloading || elections.length === 0}
+                    className="flex items-center bg-white text-brand-primary border border-brand-primary font-bold py-2 px-4 rounded-lg hover:bg-slate-100 disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed"
+                >
+                    <DownloadIcon className="h-5 w-5 mr-2" /> 
+                    {isDownloading ? 'Generando...' : 'Descargar Resultados'}
+                </button>
+            </div>
+             <div id="results-container" className="space-y-8 bg-slate-50">
+                {elections.length > 0 ? (
+                    elections.map(e => <ResultsViewer key={e.id} election={e} candidates={candidates} votes={votes} />)
+                ) : (
+                    <p className="text-center text-gray-500 py-8">No hay elecciones para mostrar resultados.</p>
+                )}
+            </div>
+        </div>
+    );
+};
 
 const ManageElections: React.FC<{ elections: Election[], openModal: (e: Election | null) => void, onDelete: (id: string) => void, onViewOverview: (e: Election) => void }> = ({ elections, openModal, onDelete, onViewOverview }) => (
     <div>
@@ -214,9 +289,17 @@ const ManageCandidates: React.FC<{ candidates: Candidate[], elections: Election[
                     {candidates.map(c => (
                         <li key={c.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50">
                             <div className="flex items-center space-x-4">
-                                <img className="h-12 w-12 rounded-full" src={c.foto_url} alt="" />
+                                <div className="relative h-12 w-12 flex-shrink-0">
+                                    <img className="h-12 w-12 rounded-full object-cover" src={c.foto_url} alt={getCandidateFullName(c)} />
+                                    {c.listLogoUrl && (
+                                        <img src={c.listLogoUrl} alt={`${c.partido_politico} Logo`} className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full border-2 border-white bg-white" />
+                                    )}
+                                </div>
                                 <div>
-                                    <p className="text-md font-medium text-slate-800 truncate">{c.nombres} {c.apellido}</p>
+                                    <p className="text-md font-medium text-slate-800 truncate flex items-center">
+                                        {getCandidateFullName(c)}
+                                        {c.listColor && <span className="ml-2 h-4 w-4 rounded-full inline-block border border-slate-300" style={{ backgroundColor: c.listColor }}></span>}
+                                    </p>
                                     <p className="text-sm text-gray-500">{c.partido_politico} - {getElectionName(c.eleccion_id)}</p>
                                 </div>
                             </div>
