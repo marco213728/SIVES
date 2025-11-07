@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { User, Election, Candidate, Vote, Organization } from '../types';
-import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ChartBarIcon, ClipboardListIcon, UploadIcon, UserIcon, ShieldCheckIcon, SearchIcon, ArrowUpIcon, ArrowDownIcon, InformationCircleIcon, DownloadIcon } from './icons';
+import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ChartBarIcon, ClipboardListIcon, UploadIcon, UserIcon, ShieldCheckIcon, SearchIcon, ArrowUpIcon, ArrowDownIcon, InformationCircleIcon, DownloadIcon, CheckCircleIcon } from './icons';
 import ElectionFormModal from './ElectionFormModal';
 import CandidateFormModal from './CandidateFormModal';
 import VoterFormModal from './VoterFormModal';
@@ -10,6 +10,7 @@ import AuditLog from './AuditLog';
 import ElectionOverviewModal from './ElectionOverviewModal';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import VoterParticipationReport from './VoterParticipationReport';
 
 
 interface AdminDashboardProps {
@@ -30,7 +31,7 @@ interface AdminDashboardProps {
     onImportVoters: (voters: Pick<User, 'codigo' | 'primer_nombre' | 'segundo_nombre' | 'primer_apellido' | 'segundo_apellido' | 'curso' | 'paralelo'>[]) => void;
 }
 
-type Tab = 'results' | 'audit' | 'elections' | 'candidates' | 'voters';
+type Tab = 'results' | 'participation' | 'audit' | 'elections' | 'candidates' | 'voters';
 
 const getCandidateFullName = (c: Candidate) => `${c.primer_nombre} ${c.segundo_nombre} ${c.primer_apellido} ${c.segundo_apellido}`.replace(/ +/g, ' ').trim();
 
@@ -104,6 +105,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
 
     const renderContent = () => {
         switch (activeTab) {
+            case 'participation':
+                return <VoterParticipationReport users={props.users} elections={props.elections} />;
             case 'audit':
                 return <AuditLog votes={props.votes} elections={props.elections} />;
             case 'elections':
@@ -126,6 +129,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                     <label htmlFor="tabs" className="sr-only">Select a tab</label>
                     <select id="tabs" name="tabs" onChange={(e) => setActiveTab(e.target.value as Tab)} value={activeTab} className="block w-full rounded-md border-gray-300 focus:border-brand-primary focus:ring-brand-primary">
                         <option value="results">Resultados</option>
+                        <option value="participation">Participación</option>
                         <option value="audit">Auditoría</option>
                         <option value="elections">Elecciones</option>
                         <option value="candidates">Candidatos</option>
@@ -136,6 +140,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                     <div className="border-b border-gray-200">
                         <nav className="flex space-x-4" aria-label="Tabs">
                             <TabButton icon={<ChartBarIcon className="h-5 w-5 mr-2" />} label="Resultados" isActive={activeTab === 'results'} onClick={() => setActiveTab('results')} />
+                            <TabButton icon={<CheckCircleIcon className="h-5 w-5 mr-2" />} label="Participación" isActive={activeTab === 'participation'} onClick={() => setActiveTab('participation')} />
                             <TabButton icon={<ShieldCheckIcon className="h-5 w-5 mr-2" />} label="Auditoría" isActive={activeTab === 'audit'} onClick={() => setActiveTab('audit')} />
                             <TabButton icon={<ClipboardListIcon className="h-5 w-5 mr-2" />} label="Elecciones" isActive={activeTab === 'elections'} onClick={() => setActiveTab('elections')} />
                             <TabButton icon={<UserGroupIcon className="h-5 w-5 mr-2" />} label="Candidatos" isActive={activeTab === 'candidates'} onClick={() => setActiveTab('candidates')} />
