@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Organization, User } from '../types';
-import { PlusIcon, PencilIcon, TrashIcon, OfficeBuildingIcon, UserGroupIcon } from './icons';
+import { PlusIcon, PencilIcon, TrashIcon, OfficeBuildingIcon, UserGroupIcon, RefreshIcon } from './icons';
 import OrganizationFormModal from './OrganizationFormModal';
 import OrganizationMemberManager from './OrganizationMemberManager';
 
@@ -13,9 +13,11 @@ interface SuperAdminDashboardProps {
     onUpdateUser: (user: User) => void;
     onDeleteUser: (id: string) => void;
     onImportUsers: (users: Pick<User, 'codigo' | 'primer_nombre' | 'segundo_nombre' | 'primer_apellido' | 'segundo_apellido' | 'curso' | 'paralelo'>[], organizationId: string) => void;
+    onRefresh: () => void;
+    isRefreshing: boolean;
 }
 
-const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ organizations, users, onCreateOrgAndAdmin, onUpdateOrganization, onAddUser, onUpdateUser, onDeleteUser, onImportUsers }) => {
+const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ organizations, users, onCreateOrgAndAdmin, onUpdateOrganization, onAddUser, onUpdateUser, onDeleteUser, onImportUsers, onRefresh, isRefreshing }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
     const [managingOrg, setManagingOrg] = useState<Organization | null>(null);
@@ -57,9 +59,19 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ organizations
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold text-slate-800">Panel de Super Administrador</h2>
-                <button onClick={() => openModal()} className="flex items-center bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-primary-darker">
-                    <PlusIcon className="h-5 w-5 mr-2" /> Crear Organización
-                </button>
+                 <div className="flex items-center space-x-2">
+                    <button 
+                        onClick={onRefresh} 
+                        disabled={isRefreshing} 
+                        className="flex items-center bg-white text-brand-primary border border-brand-primary font-bold py-2 px-4 rounded-lg hover:bg-slate-100 disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <RefreshIcon className={`h-5 w-5 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        {isRefreshing ? 'Actualizando...' : 'Actualizar'}
+                    </button>
+                    <button onClick={() => openModal()} className="flex items-center bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-primary-darker">
+                        <PlusIcon className="h-5 w-5 mr-2" /> Crear Organización
+                    </button>
+                </div>
             </div>
 
             <div className="bg-white shadow overflow-hidden sm:rounded-lg">

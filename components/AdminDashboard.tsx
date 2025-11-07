@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { User, Election, Candidate, Vote, Organization } from '../types';
-import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ChartBarIcon, ClipboardListIcon, UploadIcon, UserIcon, ShieldCheckIcon, SearchIcon, ArrowUpIcon, ArrowDownIcon, InformationCircleIcon, DownloadIcon, CheckCircleIcon } from './icons';
+import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ChartBarIcon, ClipboardListIcon, UploadIcon, UserIcon, ShieldCheckIcon, SearchIcon, ArrowUpIcon, ArrowDownIcon, InformationCircleIcon, DownloadIcon, CheckCircleIcon, RefreshIcon } from './icons';
 import ElectionFormModal from './ElectionFormModal';
 import CandidateFormModal from './CandidateFormModal';
 import VoterFormModal from './VoterFormModal';
@@ -29,6 +29,8 @@ interface AdminDashboardProps {
     onUpdateVoter: (voter: User) => void;
     onDeleteVoter: (id: string) => void;
     onImportVoters: (voters: Pick<User, 'codigo' | 'primer_nombre' | 'segundo_nombre' | 'primer_apellido' | 'segundo_apellido' | 'curso' | 'paralelo'>[]) => void;
+    onRefresh: () => void;
+    isRefreshing: boolean;
 }
 
 type Tab = 'results' | 'participation' | 'audit' | 'elections' | 'candidates' | 'voters';
@@ -106,7 +108,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     const renderContent = () => {
         switch (activeTab) {
             case 'participation':
-                return <VoterParticipationReport users={props.users} elections={props.elections} />;
+                return <VoterParticipationReport users={props.users} elections={props.elections} organization={props.organization} />;
             case 'audit':
                 return <AuditLog votes={props.votes} elections={props.elections} />;
             case 'elections':
@@ -123,7 +125,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
 
     return (
         <div>
-            <h2 className="text-3xl font-bold text-slate-800 mb-6">Panel de Administración</h2>
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold text-slate-800">Panel de Administración</h2>
+                <button 
+                    onClick={props.onRefresh} 
+                    disabled={props.isRefreshing} 
+                    className="flex items-center bg-white text-brand-primary border border-brand-primary font-bold py-2 px-4 rounded-lg hover:bg-slate-100 disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
+                >
+                    <RefreshIcon className={`h-5 w-5 mr-2 ${props.isRefreshing ? 'animate-spin' : ''}`} />
+                    {props.isRefreshing ? 'Actualizando...' : 'Actualizar Datos'}
+                </button>
+            </div>
             <div className="mb-6">
                 <div className="sm:hidden">
                     <label htmlFor="tabs" className="sr-only">Select a tab</label>
@@ -197,24 +209,27 @@ const ViewResults: React.FC<{ elections: Election[], candidates: Candidate[], vo
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
             const canvasAspectRatio = canvas.width / canvas.height;
-            const pdfAspectRatio = pdfWidth / pdfHeight;
             
-            let imgWidth = pdfWidth;
-            let imgHeight = pdfWidth / canvasAspectRatio;
+            let imgWidth = pdfWidth - 20; // with margin
+            let imgHeight = imgWidth / canvasAspectRatio;
+            let pageHeight = pdfHeight - 20; // with margin
 
-            // If image is too tall for one page, we might need to split it
-            // For now, let's fit it to one page.
-            if(imgHeight > pdfHeight) {
-                imgHeight = pdfHeight;
-                imgWidth = pdfHeight * canvasAspectRatio;
-            }
-
-            const x = (pdfWidth - imgWidth) / 2;
-            const y = 15; // margin top
+            let heightLeft = imgHeight;
+            let position = 10; // top margin
 
             pdf.setFontSize(10);
             pdf.text(`Reporte de Resultados - ${organizationName}`, pdfWidth / 2, 10, { align: 'center' });
-            pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+            
+            pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+
+            while (heightLeft > 0) {
+              position = heightLeft - imgHeight;
+              pdf.addPage();
+              pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+              heightLeft -= pageHeight;
+            }
+
             pdf.save(`resultados-${organizationName.toLowerCase().replace(/\s/g, '-')}.pdf`);
 
         } catch (error) {

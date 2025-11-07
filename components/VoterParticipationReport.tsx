@@ -1,16 +1,20 @@
 import React, { useState, useMemo } from 'react';
-import { User, Election } from '../types';
-import { CheckCircleIcon, XCircleIcon } from './icons';
+import { User, Election, Organization } from '../types';
+import { CheckCircleIcon, XCircleIcon, DownloadIcon } from './icons';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface VoterParticipationReportProps {
     users: User[];
     elections: Election[];
+    organization: Organization;
 }
 
 const getFullName = (u: User) => `${u.primer_nombre} ${u.segundo_nombre} ${u.primer_apellido} ${u.segundo_apellido}`.replace(/ +/g, ' ').trim();
 
-const VoterParticipationReport: React.FC<VoterParticipationReportProps> = ({ users, elections }) => {
+const VoterParticipationReport: React.FC<VoterParticipationReportProps> = ({ users, elections, organization }) => {
     const [filter, setFilter] = useState<'all' | 'missing'>('all');
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const activeElections = useMemo(() => elections.filter(e => e.estado === 'Activa'), [elections]);
     const studentVoters = useMemo(() => users.filter(u => u.rol === 'Estudiante'), [users]);
@@ -41,9 +45,64 @@ const VoterParticipationReport: React.FC<VoterParticipationReportProps> = ({ use
 
     const studentsWithMissingVotes = useMemo(() => participationData.filter(p => p.missingVotes > 0).length, [participationData]);
 
+    const handleDownloadPDF = async () => {
+        const reportElement = document.getElementById('participation-report');
+        if (!reportElement) {
+            console.error("Report container not found");
+            return;
+        }
+        setIsDownloading(true);
+        try {
+            const canvas = await html2canvas(reportElement, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff'
+            });
+            const imgData = canvas.toDataURL('image/png');
+            
+            const pdf = new jsPDF({
+                orientation: 'landscape',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = canvas.width;
+            const imgHeight = canvas.height;
+            const ratio = Math.min((pdfWidth - 20) / imgWidth, (pdfHeight - 20) / imgHeight);
+
+            const effectiveImgWidth = imgWidth * ratio;
+            const effectiveImgHeight = imgHeight * ratio;
+            const x = (pdfWidth - effectiveImgWidth) / 2;
+            
+            pdf.setFontSize(10);
+            pdf.text(`Reporte de Participación - ${organization.name}`, pdfWidth / 2, 10, { align: 'center' });
+            pdf.addImage(imgData, 'PNG', x, 15, effectiveImgWidth, effectiveImgHeight);
+            pdf.save(`reporte-participacion-${organization.slug}.pdf`);
+
+        } catch (error) {
+            console.error("Error generating PDF:", error);
+            alert("Hubo un error al generar el PDF.");
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
+
     return (
-        <div className="bg-white p-6 rounded-lg shadow-md border border-slate-200">
-            <h3 className="text-2xl font-bold text-slate-800 mb-4">Reporte de Participación de Votantes</h3>
+        <div id="participation-report" className="bg-white p-6 rounded-lg shadow-md border border-slate-200">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-2xl font-bold text-slate-800">Reporte de Participación de Votantes</h3>
+                <button 
+                    onClick={handleDownloadPDF}
+                    disabled={isDownloading}
+                    className="flex items-center bg-white text-brand-primary border border-brand-primary font-bold py-2 px-4 rounded-lg hover:bg-slate-100 disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed"
+                >
+                    <DownloadIcon className="h-5 w-5 mr-2" />
+                    {isDownloading ? 'Generando...' : 'Descargar PDF'}
+                </button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-center">
                     <p className="text-sm font-medium text-blue-800">Elecciones Activas</p>

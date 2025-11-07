@@ -37,6 +37,7 @@ const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [isHighContrast, setIsHighContrast] = useState(false);
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const timeoutId = useRef<ReturnType<typeof setTimeout> | null>(null);
   const warningTimeoutId = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -70,17 +71,18 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogout = useCallback(() => {
+    // Clear session timers first to prevent them from firing after logout
+    if (timeoutId.current) clearTimeout(timeoutId.current);
+    if (warningTimeoutId.current) clearTimeout(warningTimeoutId.current);
+
+    // Reset all application state
     setCurrentUser(null);
     setCurrentOrganization(null);
-    // Clear the org slug from the URL to return to the selector screen
-    window.history.replaceState({}, document.title, window.location.pathname);
-    setShowSettings(false);
-    setShowTimeoutWarning(false);
     setElections([]);
     setCandidates([]);
     setVotes([]);
-    if(timeoutId.current) clearTimeout(timeoutId.current);
-    if(warningTimeoutId.current) clearTimeout(warningTimeoutId.current);
+    setShowSettings(false);
+    setShowTimeoutWarning(false);
   }, []);
 
   const resetTimeout = useCallback(() => {
@@ -92,6 +94,38 @@ const App: React.FC = () => {
        timeoutId.current = setTimeout(() => handleLogout(), SESSION_TIMEOUT);
     }
   }, [currentUser, handleLogout]);
+  
+  const refreshData = useCallback(async () => {
+    if (!currentUser) return;
+
+    setIsRefreshing(true);
+    try {
+        if (currentUser.rol === 'SuperAdmin') {
+            const [orgs, usrs] = await Promise.all([
+                apiService.getOrganizations(),
+                apiService.getUsers(),
+            ]);
+            setOrganizations(orgs);
+            setUsers(usrs);
+        } else if (currentUser.rol === 'Admin' && currentOrganization) {
+            const [usrs, elects, cands, vts] = await Promise.all([
+                apiService.getUsers(),
+                apiService.getElections(currentOrganization.id),
+                apiService.getCandidates(currentOrganization.id),
+                apiService.getVotes(currentOrganization.id)
+            ]);
+            setUsers(usrs);
+            setElections(elects);
+            setCandidates(cands);
+            setVotes(vts);
+        }
+    } catch (error) {
+        console.error("Failed to refresh data:", error);
+        alert("Ocurrió un error al actualizar los datos.");
+    } finally {
+        setIsRefreshing(false);
+    }
+  }, [currentUser, currentOrganization]);
 
   useEffect(() => {
     const events = ['mousemove', 'keydown', 'scroll', 'click'];
@@ -372,6 +406,8 @@ const App: React.FC = () => {
                 onUpdateUser={handleUpdateUser}
                 onDeleteUser={handleDeleteUser}
                 onImportUsers={handleImportUsers}
+                onRefresh={refreshData}
+                isRefreshing={isRefreshing}
             />;
         }
 
@@ -399,7 +435,9 @@ const App: React.FC = () => {
             onAddVoter={(voterData) => handleAddUser(voterData, currentOrganization.id)} 
             onUpdateVoter={handleUpdateUser} 
             onDeleteVoter={handleDeleteUser} 
-            onImportVoters={(voterData) => handleImportUsers(voterData, currentOrganization.id)} 
+            onImportVoters={(voterData) => handleImportUsers(voterData, currentOrganization.id)}
+            onRefresh={refreshData}
+            isRefreshing={isRefreshing}
           />;
         }
 
