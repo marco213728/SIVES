@@ -85,6 +85,41 @@ export const createOrganizationAndAdmin = async (orgData: Omit<Organization, 'id
     return { newOrg, newAdmin };
 }
 
+export const deleteOrganizationAndData = async (organizationId: string): Promise<void> => {
+    const batch = writeBatch(db);
+
+    // 1. Delete Users
+    const usersQuery = query(collection(db, 'users'), where('organizationId', '==', organizationId));
+    const usersSnapshot = await getDocs(usersQuery);
+    usersSnapshot.forEach(doc => batch.delete(doc.ref));
+
+    // 2. Get Elections to find Candidates
+    const electionsQuery = query(collection(db, 'elections'), where('organizationId', '==', organizationId));
+    const electionsSnapshot = await getDocs(electionsQuery);
+    const electionIds = electionsSnapshot.docs.map(doc => doc.id);
+
+    // 3. Delete Candidates if any elections exist
+    if (electionIds.length > 0) {
+        const candidatesQuery = query(collection(db, 'candidates'), where('eleccion_id', 'in', electionIds));
+        const candidatesSnapshot = await getDocs(candidatesQuery);
+        candidatesSnapshot.forEach(doc => batch.delete(doc.ref));
+    }
+
+    // 4. Delete Votes
+    const votesQuery = query(collection(db, 'votes'), where('organizationId', '==', organizationId));
+    const votesSnapshot = await getDocs(votesQuery);
+    votesSnapshot.forEach(doc => batch.delete(doc.ref));
+
+    // 5. Delete Elections
+    electionsSnapshot.forEach(doc => batch.delete(doc.ref));
+
+    // 6. Delete Organization
+    const orgRef = doc(db, 'organizations', organizationId);
+    batch.delete(orgRef);
+
+    await batch.commit();
+};
+
 
 // --- Org Admin Write Operations ---
 
@@ -104,7 +139,21 @@ export const updateUser = async (updatedUser: User): Promise<User> => {
     return updatedUser;
 };
 export const deleteUser = async (id: string): Promise<void> => {
-    await deleteDoc(doc(db, 'users', id));
+    const batch = writeBatch(db);
+
+    // 1. Find votes by user
+    const votesQuery = query(collection(db, 'votes'), where('user_id', '==', id));
+    const votesSnapshot = await getDocs(votesQuery);
+    
+    // 2. Add votes to batch for deletion
+    votesSnapshot.forEach(doc => batch.delete(doc.ref));
+
+    // 3. Add user to batch for deletion
+    const userRef = doc(db, 'users', id);
+    batch.delete(userRef);
+
+    // 4. Commit
+    await batch.commit();
 };
 export const importVoters = async (importedVoters: Pick<User, 'codigo' | 'primer_nombre' | 'segundo_nombre' | 'primer_apellido' | 'segundo_apellido' | 'curso' | 'paralelo'>[], organizationId: string): Promise<User[]> => {
     const usersQuery = query(collection(db, 'users'), where('organizationId', '==', organizationId));

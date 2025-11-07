@@ -9,6 +9,7 @@ interface SuperAdminDashboardProps {
     users: User[];
     onCreateOrgAndAdmin: (org: Omit<Organization, 'id'>, admin: Omit<User, 'id'|'organizationId'|'rol'|'ha_votado'>) => void;
     onUpdateOrganization: (org: Organization) => void;
+    onDeleteOrganization: (id: string) => void;
     onAddUser: (user: Omit<User, 'id' | 'ha_votado'>, organizationId: string) => void;
     onUpdateUser: (user: User) => void;
     onDeleteUser: (id: string) => void;
@@ -17,7 +18,7 @@ interface SuperAdminDashboardProps {
     isRefreshing: boolean;
 }
 
-const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ organizations, users, onCreateOrgAndAdmin, onUpdateOrganization, onAddUser, onUpdateUser, onDeleteUser, onImportUsers, onRefresh, isRefreshing }) => {
+const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ organizations, users, onCreateOrgAndAdmin, onUpdateOrganization, onDeleteOrganization, onAddUser, onUpdateUser, onDeleteUser, onImportUsers, onRefresh, isRefreshing }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
     const [managingOrg, setManagingOrg] = useState<Organization | null>(null);
@@ -98,7 +99,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ organizations
                                 <div className="space-x-1">
                                     <button onClick={() => setManagingOrg(org)} className="p-2 rounded-full text-gray-500 hover:bg-slate-200 hover:text-green-600" title="Gestionar Miembros"><UserGroupIcon className="h-5 w-5" /></button>
                                     <button onClick={() => openModal(org)} className="p-2 rounded-full text-gray-500 hover:bg-slate-200 hover:text-brand-primary" title="Editar"><PencilIcon className="h-5 w-5" /></button>
-                                    <button onClick={() => window.confirm('¿Seguro que quiere eliminar esta organización y todos sus datos asociados?') && console.log('delete')} className="p-2 rounded-full text-gray-500 hover:bg-slate-200 hover:text-red-600" title="Eliminar"><TrashIcon className="h-5 w-5" /></button>
+                                    <button onClick={() => window.confirm('¿Está absolutamente seguro? Esta acción eliminará permanentemente la organización y todos sus datos asociados (votantes, elecciones, votos). Esta acción no se puede deshacer.') && onDeleteOrganization(org.id)} className="p-2 rounded-full text-gray-500 hover:bg-slate-200 hover:text-red-600" title="Eliminar"><TrashIcon className="h-5 w-5" /></button>
                                 </div>
                             </li>
                         )

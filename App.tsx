@@ -236,6 +236,17 @@ const App: React.FC = () => {
         alert(`Ocurrió un error al crear la organización: ${error instanceof Error ? error.message : String(error)}`);
       }
   };
+  
+  const handleDeleteOrganization = async (id: string) => {
+    try {
+        await apiService.deleteOrganizationAndData(id);
+        setOrganizations(prev => prev.filter(o => o.id !== id));
+        setUsers(prev => prev.filter(u => u.organizationId !== id));
+    } catch (error) {
+        console.error("Error deleting organization:", error);
+        alert(`Ocurrió un error al eliminar la organización: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
 
   // Admin operations
   const handleAddElection = async (electionData: Omit<Election, 'id'>) => {
@@ -323,6 +334,7 @@ const App: React.FC = () => {
     try {
         await apiService.deleteUser(id);
         setUsers(prev => prev.filter(u => u.id !== id));
+        setVotes(prev => prev.filter(v => v.user_id !== id));
     } catch (error) {
         console.error("Error deleting user:", error);
         alert(`Ocurrió un error al eliminar el usuario: ${error instanceof Error ? error.message : String(error)}`);
@@ -402,6 +414,7 @@ const App: React.FC = () => {
                 users={users}
                 onCreateOrgAndAdmin={handleCreateOrgAndAdmin}
                 onUpdateOrganization={handleUpdateOrganization}
+                onDeleteOrganization={handleDeleteOrganization}
                 onAddUser={handleAddUser}
                 onUpdateUser={handleUpdateUser}
                 onDeleteUser={handleDeleteUser}

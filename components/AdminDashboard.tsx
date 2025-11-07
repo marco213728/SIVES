@@ -349,6 +349,10 @@ const ManageVoters: React.FC<{ users: User[], openModal: (u: User | null) => voi
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
     const studentVoters = useMemo(() => users.filter(u => u.rol === 'Estudiante'), [users]);
+    
+    const totalVotersCount = studentVoters.length;
+    const votedCount = useMemo(() => studentVoters.filter(u => u.ha_votado.length > 0).length, [studentVoters]);
+    const notVotedCount = totalVotersCount - votedCount;
 
     const uniqueCursos = useMemo(() => [...new Set(studentVoters.map(u => u.curso))].sort(), [studentVoters]);
     const uniqueParalelos = useMemo(() => [...new Set(studentVoters.map(u => u.paralelo))].sort(), [studentVoters]);
@@ -457,6 +461,26 @@ const ManageVoters: React.FC<{ users: User[], openModal: (u: User | null) => voi
                     <option value="voted">Ya Votaron</option>
                     <option value="not-voted">No Han Votado</option>
                 </select>
+            </div>
+        </div>
+        
+        {/* Totals Section */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-center">
+                <p className="text-sm font-medium text-blue-800">Votantes Totales</p>
+                <p className="text-3xl font-bold text-blue-900">{totalVotersCount}</p>
+            </div>
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-center">
+                <p className="text-sm font-medium text-green-800">Han Votado</p>
+                <p className="text-3xl font-bold text-green-900">{votedCount}</p>
+            </div>
+            <div className="bg-red-50 p-4 rounded-lg border border-red-200 text-center">
+                <p className="text-sm font-medium text-red-800">No Han Votado</p>
+                <p className="text-3xl font-bold text-red-900">{notVotedCount}</p>
+            </div>
+            <div className="bg-slate-100 p-4 rounded-lg border border-slate-200 text-center">
+                <p className="text-sm font-medium text-slate-700">Mostrando (Filtrado)</p>
+                <p className="text-3xl font-bold text-slate-800">{displayedVoters.length}</p>
             </div>
         </div>
 
