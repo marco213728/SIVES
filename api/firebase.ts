@@ -1,14 +1,29 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
 import { getAnalytics, isSupported, Analytics } from 'firebase/analytics';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Suppress transient network warning logs in iframe preview
 setLogLevel('error');
 
-// Initialize Firebase App
-export const app = initializeApp(firebaseConfig);
+// Initialize Firebase App safely (handles HMR re-evaluations without throwing duplicate-app errors)
+export const app = (() => {
+  const existingApps = getApps();
+  if (existingApps.length > 0) {
+    const current = getApp();
+    if (
+      current.options.projectId === firebaseConfig.projectId &&
+      current.options.appId === firebaseConfig.appId
+    ) {
+      return current;
+    }
+    try {
+      deleteApp(current);
+    } catch {}
+  }
+  return initializeApp(firebaseConfig);
+})();
 
 // Initialize Cloud Firestore with resilient forced long-polling to prevent WebSocket drops in sandboxed iframes
 const dbId =
@@ -16,13 +31,19 @@ const dbId =
     ? firebaseConfig.firestoreDatabaseId
     : undefined;
 
-export const db = initializeFirestore(
-  app,
-  {
-    experimentalForceLongPolling: true,
-  },
-  dbId
-);
+export const db = (() => {
+  try {
+    return initializeFirestore(
+      app,
+      {
+        experimentalForceLongPolling: true,
+      },
+      dbId
+    );
+  } catch {
+    return getFirestore(app, dbId);
+  }
+})();
 
 // Initialize Firebase Auth
 export const auth = getAuth(app);

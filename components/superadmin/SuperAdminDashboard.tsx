@@ -38,6 +38,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [selectedOrgForAdmins, setSelectedOrgForAdmins] = useState<Organization | null>(null);
   const [activeTab, setActiveTab] = useState<'organizations' | 'metrics'>('organizations');
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -60,12 +61,30 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   }, []);
 
   const handleSaveOrganization = async (orgData: Partial<Organization>) => {
-    if (orgToEdit) {
-      await apiService.updateOrganization(orgToEdit.id, orgData);
-    } else {
-      await apiService.createOrganization(orgData as any);
+    try {
+      if (orgToEdit) {
+        await apiService.updateOrganization(orgToEdit.id, orgData);
+        setNotification({
+          type: 'success',
+          message: `Institución "${orgData.name || orgToEdit.name}" actualizada con éxito en la base de datos.`
+        });
+      } else {
+        const created = await apiService.createOrganization(orgData as any);
+        setNotification({
+          type: 'success',
+          message: `Institución "${created.name}" creada y sincronizada con éxito en la base de datos.`
+        });
+      }
+      await loadData();
+      setTimeout(() => setNotification(null), 5000);
+    } catch (e: any) {
+      console.error('Error saving organization:', e);
+      setNotification({
+        type: 'error',
+        message: e?.message || 'Error al guardar la institución en la base de datos.'
+      });
+      throw e;
     }
-    await loadData();
   };
 
   const handleToggleStatus = async (org: Organization) => {
@@ -116,6 +135,27 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           </button>
         </div>
       </div>
+
+      {notification && (
+        <div
+          className={`p-4 rounded-xl flex items-center justify-between border ${
+            notification.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xl">{notification.type === 'success' ? '✓' : '⚠️'}</span>
+            <p className="text-sm font-medium">{notification.message}</p>
+          </div>
+          <button
+            onClick={() => setNotification(null)}
+            className="text-xs font-bold uppercase opacity-70 hover:opacity-100"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
 
       {/* KPI Metrics */}
       {metrics && (

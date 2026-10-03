@@ -91,11 +91,36 @@ const getCollectionData = async <T extends { id: string }>(collectionName: strin
     }
 };
 
+// Recursively strip undefined values so Firestore never throws unsupported field value error
+export const sanitizeForFirestore = <T>(obj: T): T => {
+    if (obj === null || obj === undefined) {
+        return null as any;
+    }
+    if (Array.isArray(obj)) {
+        return obj
+            .filter(item => item !== undefined)
+            .map(item => sanitizeForFirestore(item)) as any;
+    }
+    if (typeof obj === 'object' && !(obj instanceof Date)) {
+        const cleaned: Record<string, any> = {};
+        for (const [key, value] of Object.entries(obj)) {
+            if (value !== undefined) {
+                cleaned[key] = sanitizeForFirestore(value);
+            }
+        }
+        return cleaned as T;
+    }
+    return obj;
+};
+
 const saveDocument = async <T extends { id: string }>(collectionName: string, docId: string, data: T): Promise<void> => {
     try {
-        await setDoc(doc(db, collectionName, docId), data);
+        const cleanData = sanitizeForFirestore(data);
+        await setDoc(doc(db, collectionName, docId), cleanData);
     } catch (error) {
+        console.error(`Error saving document to Firestore (${collectionName}/${docId}):`, error);
         handleFirestoreError(error, OperationType.WRITE, `${collectionName}/${docId}`);
+        throw error;
     }
 };
 
@@ -103,7 +128,9 @@ const removeDocument = async (collectionName: string, docId: string): Promise<vo
     try {
         await deleteDoc(doc(db, collectionName, docId));
     } catch (error) {
+        console.error(`Error deleting document from Firestore (${collectionName}/${docId}):`, error);
         handleFirestoreError(error, OperationType.DELETE, `${collectionName}/${docId}`);
+        throw error;
     }
 };
 
@@ -123,27 +150,38 @@ export const getOrganizationById = async (id: string): Promise<Organization | nu
 export const createOrganization = async (
     orgData: Omit<Organization, 'createdAt' | 'updatedAt'> & { id?: string }
 ): Promise<Organization> => {
-    const orgs = getLocalData<Organization>('organizations');
-    const slug = (orgData.id || orgData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')) || `org-${Date.now()}`;
+    const orgs = await getOrganizations();
+    const cleanName = (orgData.name || '').trim();
+    const rawSlug = (
+        orgData.id ||
+        cleanName
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/(^-|-$)/g, '')
+    );
+    const slug = rawSlug || `org-${Date.now()}`;
     const now = new Date().toISOString();
     
     const newOrg: Organization = {
         id: slug,
         slug,
-        name: orgData.name,
-        code: orgData.code || `ORG-${orgs.length + 1}`,
+        name: cleanName,
+        code: orgData.code?.trim().toUpperCase() || `ORG-${orgs.length + 1}`,
         logoUrl: orgData.logoUrl || null,
         primaryColor: orgData.primaryColor || '#005A9C',
         status: orgData.status || 'ACTIVE',
         createdAt: now,
         updatedAt: now,
-        location: orgData.location,
+        location: orgData.location || '',
         subscriptionType: orgData.subscriptionType || 'Free',
         billingType: orgData.billingType || 'None',
     };
 
-    setLocalData('organizations', [...orgs, newOrg]);
-    await saveDocument('organizations', newOrg.id, newOrg).catch(() => {});
+    await saveDocument('organizations', newOrg.id, newOrg);
+    const updatedList = [...orgs.filter(o => o.id !== newOrg.id), newOrg];
+    setLocalData('organizations', updatedList);
     return newOrg;
 };
 
@@ -151,7 +189,7 @@ export const updateOrganization = async (
     id: string,
     updates: Partial<Organization>
 ): Promise<Organization> => {
-    const orgs = getLocalData<Organization>('organizations');
+    const orgs = await getOrganizations();
     const index = orgs.findIndex(o => o.id === id || o.slug === id);
     if (index === -1) {
         throw new Error(`Organización no encontrada: ${id}`);
@@ -160,13 +198,23 @@ export const updateOrganization = async (
     const updated: Organization = {
         ...orgs[index],
         ...updates,
+        location: updates.location !== undefined ? (updates.location || '') : (orgs[index].location || ''),
         updatedAt: new Date().toISOString(),
     };
 
+    await saveDocument('organizations', updated.id, updated);
     orgs[index] = updated;
     setLocalData('organizations', orgs);
-    await saveDocument('organizations', updated.id, updated).catch(() => {});
     return updated;
+};
+
+export const deleteOrganization = async (id: string): Promise<void> => {
+    const orgs = await getOrganizations();
+    const target = orgs.find(o => o.id === id || o.slug === id);
+    if (target) {
+        await removeDocument('organizations', target.id);
+        setLocalData('organizations', orgs.filter(o => o.id !== target.id));
+    }
 };
 
 export const toggleOrganizationStatus = async (
