@@ -1,19 +1,27 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
 import { getAnalytics, isSupported, Analytics } from 'firebase/analytics';
 import firebaseConfig from '../firebase-applet-config.json';
+
+// Suppress transient network warning logs in iframe preview
+setLogLevel('error');
 
 // Initialize Firebase App
 export const app = initializeApp(firebaseConfig);
 
-// Initialize Cloud Firestore with dedicated Database ID and resilient connection settings
+// Initialize Cloud Firestore with resilient forced long-polling to prevent WebSocket drops in sandboxed iframes
+const dbId =
+  firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
+    ? firebaseConfig.firestoreDatabaseId
+    : undefined;
+
 export const db = initializeFirestore(
   app,
   {
-    experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: true,
   },
-  firebaseConfig.firestoreDatabaseId
+  dbId
 );
 
 // Initialize Firebase Auth

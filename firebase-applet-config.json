@@ -1,12 +1,12 @@
 {
-  "projectId": "gen-lang-client-0823135501",
-  "appId": "1:101973445003:web:b6b1b66f3cce89b105c78e",
-  "apiKey": "AIzaSyBL_eGMZmgLE0vQhsGDRfnU1yVRvY_0Qow",
-  "authDomain": "gen-lang-client-0823135501.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-sivessistemadevo-85d58c2f-a67d-4b7f-8a0e-545793c0208d",
-  "storageBucket": "gen-lang-client-0823135501.firebasestorage.app",
-  "messagingSenderId": "101973445003",
-  "measurementId": "G-EQGCPXHVEY",
-  "oAuthClientId": "101973445003-n69oamgs77p10l15lns5l2s6t62gu1p9.apps.googleusercontent.com",
+  "projectId": "sives-09484188-fd8cb",
+  "appId": "1:561458248187:web:1e7bf49dbd61eab570735e",
+  "apiKey": "AIzaSyBc4KWgA77mS-0METDPGqKASbr8Rd7lOBU",
+  "authDomain": "sives-09484188-fd8cb.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "sives-09484188-fd8cb.firebasestorage.app",
+  "messagingSenderId": "561458248187",
+  "measurementId": "",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }
