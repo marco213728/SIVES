@@ -1,72 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SIVES - Sistema de Votación Escolar</title>
+    <meta name="description" content="A secure, anonymous, and user-friendly digital voting system designed for school elections. It features separate interfaces for student voters and administrators, providing real-time, verifiable results while ensuring voter privacy." />
+    <meta property="og:title" content="SIVES - Sistema de Votación Escolar" />
+    <meta property="og:description" content="A secure, anonymous, and user-friendly digital voting system designed for school elections. It features separate interfaces for student voters and administrators, providing real-time, verifiable results while ensuring voter privacy." />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Using Tailwind via CDN to ensure styles are applied without a build step -->
-    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-            },
-            colors: {
-              'brand-primary': 'var(--brand-primary, #005A9C)',
-              'brand-primary-darker': 'var(--brand-primary-darker, #004B8A)',
-              'brand-secondary': '#FDB813',
-            },
-          },
-        },
-      }
-    </script>
-    <style type="text/tailwindcss">
-      @layer base {
-        html {
-          font-family: 'Inter', sans-serif;
-        }
-        
-        body {
-          @apply bg-slate-50 text-slate-700 antialiased;
-        }
-
-        /* Custom focus ring for accessibility */
-        *:focus-visible {
-          @apply outline-none ring-2 ring-offset-2 ring-brand-primary;
-        }
+    <style>
+      .high-contrast {
+        filter: contrast(175%);
       }
     </style>
-
-  <script type="importmap">
-{
-  "imports": {
-    "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
-    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js",
-    "recharts": "https://aistudiocdn.com/recharts@^3.3.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.5.0/",
-    "jspdf": "https://cdn.skypack.dev/jspdf",
-    "html2canvas": "https://cdn.skypack.dev/html2canvas"
-  }
-}
-</script>
-<style>
-  .high-contrast {
-    filter: contrast(175%);
-  }
-</style>
-</head>
+  </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/index.js"></script>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>

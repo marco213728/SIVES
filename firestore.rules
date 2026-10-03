@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // Organizations
+    match /organizations/{organizationId} {
+      allow read: if true;
+      allow write: if isValidId(organizationId);
+    }
+
+    // Users (Students, Admins, Superadmins)
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isValidId(userId);
+    }
+
+    // Elections
+    match /elections/{electionId} {
+      allow read: if true;
+      allow write: if isValidId(electionId);
+    }
+
+    // Candidates
+    match /candidates/{candidateId} {
+      allow read: if true;
+      allow write: if isValidId(candidateId);
+    }
+
+    // Votes - Immutable once cast
+    match /votes/{voteId} {
+      allow read: if true;
+      allow create: if isValidId(voteId);
+      allow update, delete: if false;
+    }
+
+    // Catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

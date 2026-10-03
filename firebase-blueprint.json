@@ -1,0 +1,132 @@
+{
+  "entities": {
+    "Organization": {
+      "title": "Organization",
+      "description": "Institución Educativa (Tenant)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "slug": { "type": "string" },
+        "name": { "type": "string", "maxLength": 200 },
+        "code": { "type": "string", "maxLength": 20 },
+        "logoUrl": { "type": "string" },
+        "primaryColor": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "code", "primaryColor", "status"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Padrón electoral, administradores y superadministrador",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "codigo": { "type": "string", "maxLength": 50 },
+        "studentCode": { "type": "string", "maxLength": 50 },
+        "username": { "type": "string", "maxLength": 50 },
+        "name": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["SUPERADMIN", "ADMIN", "STUDENT"] },
+        "rol": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "email": { "type": "string" },
+        "password": { "type": "string" },
+        "ha_votado": { "type": "array" },
+        "primer_nombre": { "type": "string" },
+        "segundo_nombre": { "type": "string" },
+        "primer_apellido": { "type": "string" },
+        "segundo_apellido": { "type": "string" },
+        "curso": { "type": "string" },
+        "paralelo": { "type": "string" }
+      },
+      "required": ["codigo"]
+    },
+    "Election": {
+      "title": "Election",
+      "description": "Elección estudiantil por institución",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "nombre": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string" },
+        "descripcion": { "type": "string" },
+        "startDate": { "type": "string" },
+        "fecha_inicio": { "type": "string" },
+        "endDate": { "type": "string" },
+        "fecha_fin": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACTIVE", "UPCOMING", "CLOSED"] },
+        "estado": { "type": "string" },
+        "allowBlank": { "type": "boolean" },
+        "allowWriteIn": { "type": "boolean" },
+        "resultados_publicos": { "type": "boolean" }
+      },
+      "required": ["organizationId", "nombre"]
+    },
+    "Candidate": {
+      "title": "Candidate",
+      "description": "Candidatos postulados a comicios escolares",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "electionId": { "type": "string" },
+        "eleccion_id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "name": { "type": "string", "maxLength": 150 },
+        "nombres": { "type": "string" },
+        "apellido": { "type": "string" },
+        "party": { "type": "string" },
+        "partido_politico": { "type": "string" },
+        "cargo": { "type": "string" },
+        "platform": { "type": "string" },
+        "descripcion": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "foto_url": { "type": "string" }
+      },
+      "required": ["eleccion_id", "nombres"]
+    },
+    "Vote": {
+      "title": "Vote",
+      "description": "Voto emitido con recibo criptográfico",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "electionId": { "type": "string" },
+        "eleccion_id": { "type": "string" },
+        "userId": { "type": "string" },
+        "user_id": { "type": "string" },
+        "candidateId": { "type": "string" },
+        "candidato_id": { "type": "string" },
+        "write_in_name": { "type": "string" },
+        "receipt": { "type": "string" },
+        "fecha_voto": { "type": "string" }
+      },
+      "required": ["organizationId", "eleccion_id", "user_id", "receipt"]
+    }
+  },
+  "firestore": {
+    "/organizations/{organizationId}": {
+      "schema": "Organization",
+      "description": "Colección de instituciones educativas registradas"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Padrón electoral y usuarios con roles del sistema"
+    },
+    "/elections/{electionId}": {
+      "schema": "Election",
+      "description": "Elecciones creadas por colegios"
+    },
+    "/candidates/{candidateId}": {
+      "schema": "Candidate",
+      "description": "Candidatos registrados en cada elección"
+    },
+    "/votes/{voteId}": {
+      "schema": "Vote",
+      "description": "Sufragios emitidos y recibos criptográficos"
+    }
+  }
+}

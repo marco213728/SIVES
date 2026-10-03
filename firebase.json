@@ -1,4 +1,14 @@
 {
+  "firestore": [
+    {
+      "database": "ai-studio-sivessistemadevo-85d58c2f-a67d-4b7f-8a0e-545793c0208d",
+      "rules": "firestore.rules"
+    },
+    {
+      "database": "(default)",
+      "rules": "firestore.rules"
+    }
+  ],
   "hosting": {
     "public": "dist",
     "ignore": [

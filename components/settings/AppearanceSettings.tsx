@@ -11,6 +11,7 @@ const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ settings, onUpd
     const [logoUrl, setLogoUrl] = useState<string | null>('');
     const [primaryColor, setPrimaryColor] = useState('');
     const [isSaved, setIsSaved] = useState(false);
+    const [fileError, setFileError] = useState<string | null>(null);
 
     useEffect(() => {
         setLogoUrl(settings.logoUrl || null);
@@ -19,9 +20,10 @@ const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ settings, onUpd
     
     const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
+        setFileError(null);
         if (file) {
             if (file.size > 2 * 1024 * 1024) { // 2MB limit
-                alert("File is too large. Max size is 2MB.");
+                setFileError("El archivo es demasiado grande. El tamaño máximo es 2MB.");
                 return;
             }
             const reader = new FileReader();
@@ -66,6 +68,7 @@ const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ settings, onUpd
                         </label>
                     </div>
                      <p className="mt-1 text-xs text-gray-500">Max file size: 2MB. Allowed types: .jpg, .gif, .png</p>
+                     {fileError && <p className="mt-1 text-xs text-red-600 font-medium">{fileError}</p>}
                 </div>
                  <div>
                     <label htmlFor="primaryColor" className="block text-sm font-medium text-gray-700">Color</label>
