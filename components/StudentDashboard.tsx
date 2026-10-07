@@ -170,9 +170,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, votableElecti
                 </button>
             </div>
             <div className="space-y-8">
-                {closedElectionsWithPublicResults.map(e => (
-                    <ResultsViewer key={e.id} election={e} candidates={candidates} votes={votes} />
-                ))}
+                {closedElectionsWithPublicResults
+                    .filter((e, idx, arr) => arr.findIndex(item => item.id === e.id) === idx)
+                    .map((e, idx) => (
+                        <ResultsViewer key={e.id || `res-closed-${idx}`} election={e} candidates={candidates} votes={votes} />
+                    ))}
             </div>
         </div>
     );

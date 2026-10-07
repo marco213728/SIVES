@@ -138,9 +138,11 @@ const VoterParticipationReport: React.FC<VoterParticipationReportProps> = ({ use
                         <tr>
                             <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Votante</th>
                             <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
-                            {activeElections.map(election => (
-                                <th key={election.id} scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider truncate">{election.nombre}</th>
-                            ))}
+                            {activeElections
+                                .filter((e, idx, arr) => arr.findIndex(item => item.id === e.id) === idx)
+                                .map((election, idx) => (
+                                    <th key={election.id || `vpr-elec-${idx}`} scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider truncate">{election.nombre}</th>
+                                ))}
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">

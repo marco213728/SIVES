@@ -48,6 +48,15 @@ const App: React.FC = () => {
   const timeoutId = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const warningTimeoutId = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  const handleSelectOrganization = useCallback((org: Organization) => {
+    setCurrentOrganization(org);
+    try {
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.set('org', org.slug || org.id);
+      window.history.replaceState({}, '', currentUrl.toString());
+    } catch {}
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
       const [orgs, usrs, elects, cands, vts] = await Promise.all([
@@ -57,15 +66,58 @@ const App: React.FC = () => {
         apiService.getCandidates(),
         apiService.getVotes(),
       ]);
-      setOrganizations(orgs);
-      setUsers(usrs);
-      setElections(elects);
-      setCandidates(cands);
-      setVotes(vts);
 
-      if (orgs.length > 0 && !currentOrganization) {
-        const firstActive = orgs.find((o) => o.status === 'ACTIVE') || orgs[0];
-        setCurrentOrganization(firstActive);
+      const dedupe = <T extends { id: string }>(items: T[]): T[] => {
+        const seen = new Set<string>();
+        return items.filter((item) => {
+          if (!item?.id || seen.has(item.id)) return false;
+          seen.add(item.id);
+          return true;
+        });
+      };
+
+      setOrganizations(dedupe(orgs));
+      setUsers(dedupe(usrs));
+      setElections(dedupe(elects));
+      setCandidates(dedupe(cands));
+      setVotes(dedupe(vts));
+
+      if (orgs.length > 0) {
+        // Read ?org= parameter from URL if provided
+        const urlParams = new URLSearchParams(window.location.search);
+        const orgParam = urlParams.get('org');
+        let targetOrg: Organization | undefined;
+
+        if (orgParam) {
+          const searchKey = orgParam.toLowerCase().trim();
+          targetOrg = orgs.find(
+            (o) =>
+              o.slug?.toLowerCase() === searchKey ||
+              o.id?.toLowerCase() === searchKey ||
+              o.code?.toLowerCase() === searchKey
+          );
+        }
+
+        if (!targetOrg && currentOrganization) {
+          targetOrg = orgs.find((o) => o.id === currentOrganization.id) || currentOrganization;
+        }
+
+        if (!targetOrg) {
+          targetOrg = orgs.find((o) => o.status === 'ACTIVE') || orgs[0];
+        }
+
+        setCurrentOrganization(targetOrg);
+
+        // Keep URL in sync
+        if (targetOrg && targetOrg.slug) {
+          try {
+            const currentUrl = new URL(window.location.href);
+            if (currentUrl.searchParams.get('org') !== targetOrg.slug) {
+              currentUrl.searchParams.set('org', targetOrg.slug);
+              window.history.replaceState({}, '', currentUrl.toString());
+            }
+          } catch {}
+        }
       }
       setOrgLoaded(true);
     } catch (e) {
@@ -140,22 +192,42 @@ const App: React.FC = () => {
     document.documentElement.classList.toggle('high-contrast', isHighContrast);
   }, [activeOrg, isSuperadmin, inspectingOrg, isHighContrast]);
 
-  // Tenant-filtered entities
+  // Tenant-filtered entities (strictly deduplicated by ID)
   const orgUsers = useMemo(() => {
     if (!activeOrg) return [];
-    return users.filter((u) => u.organizationId === activeOrg.id);
+    const seen = new Set<string>();
+    return users
+      .filter((u) => u.organizationId === activeOrg.id)
+      .filter((u) => {
+        if (!u.id || seen.has(u.id)) return false;
+        seen.add(u.id);
+        return true;
+      });
   }, [users, activeOrg]);
 
   const orgVotes = useMemo(() => {
     if (!activeOrg) return [];
-    return votes.filter((v) => v.organizationId === activeOrg.id);
+    const seen = new Set<string>();
+    return votes
+      .filter((v) => v.organizationId === activeOrg.id)
+      .filter((v) => {
+        if (!v.id || seen.has(v.id)) return false;
+        seen.add(v.id);
+        return true;
+      });
   }, [votes, activeOrg]);
 
   const orgElections = useMemo(() => {
     if (!activeOrg) return [];
     const today = new Date().toISOString().split('T')[0];
+    const seen = new Set<string>();
     return elections
       .filter((e) => e.organizationId === activeOrg.id)
+      .filter((e) => {
+        if (!e.id || seen.has(e.id)) return false;
+        seen.add(e.id);
+        return true;
+      })
       .map((election) => {
         const startDate = election.startDate || election.fecha_inicio;
         const endDate = election.endDate || election.fecha_fin;
@@ -306,7 +378,7 @@ const App: React.FC = () => {
   const handleAddElection = async (election: Omit<Election, 'id'>) => {
     if (!activeOrg) return;
     const newElection = await apiService.addElection(election, activeOrg.id);
-    setElections((prev) => [...prev, newElection]);
+    setElections((prev) => [...prev.filter((e) => e.id !== newElection.id), newElection]);
   };
 
   const handleUpdateElection = async (election: Election) => {
@@ -325,7 +397,7 @@ const App: React.FC = () => {
       ...candidate,
       organizationId: activeOrg?.id,
     });
-    setCandidates((prev) => [...prev, newCandidate]);
+    setCandidates((prev) => [...prev.filter((c) => c.id !== newCandidate.id), newCandidate]);
   };
 
   const handleUpdateCandidate = async (candidate: Candidate) => {
@@ -342,7 +414,7 @@ const App: React.FC = () => {
   const handleAddVoter = async (voter: Omit<User, 'id' | 'ha_votado'>) => {
     if (!activeOrg) return;
     const newVoter = await apiService.addUser(voter, activeOrg.id);
-    setUsers((prev) => [...prev, newVoter]);
+    setUsers((prev) => [...prev.filter((u) => u.id !== newVoter.id), newVoter]);
   };
 
   const handleUpdateUser = async (user: User) => {
@@ -390,7 +462,7 @@ const App: React.FC = () => {
         <LoginComponent
           organizations={organizations}
           currentOrganization={currentOrganization}
-          onSelectOrganization={(org) => setCurrentOrganization(org)}
+          onSelectOrganization={handleSelectOrganization}
           onLogin={handleLogin}
         />
       );

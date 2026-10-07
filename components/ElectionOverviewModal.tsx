@@ -14,7 +14,11 @@ const ElectionOverviewModal: React.FC<ElectionOverviewModalProps> = ({ isOpen, o
 
     if (!isOpen || !election || !organization) return null;
 
-    const electionUrl = `${window.location.origin}${window.location.pathname}?org=${organization.slug}`;
+    // Public shareable URL for voters and students
+    const publicSharedOrigin = 'https://ais-pre-6qbguwx4icrgln3p7i5di4-40985683724.us-west1.run.app';
+    const isSharedEnvironment = typeof window !== 'undefined' && window.location.origin.includes('ais-pre');
+    const baseOrigin = isSharedEnvironment ? window.location.origin : publicSharedOrigin;
+    const electionUrl = `${baseOrigin}/?org=${encodeURIComponent(organization.slug || organization.id)}`;
 
     const handleCopy = () => {
         navigator.clipboard.writeText(electionUrl).then(() => {

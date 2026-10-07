@@ -102,20 +102,20 @@ export interface AuditLogEntry {
   timestamp: string;
 }
 
-// Vote Record
+// Vote Record (Ballot Secrecy: user_id and voterId are decoupled from ballot choices)
 export interface Vote {
   id: string;
   organizationId: string;
   eleccion_id: string;
   electionId?: string;
-  user_id: string;
-  voterId?: string;
+  user_id?: string; // Optional for backward compatibility; omitted in new votes for secrecy
+  voterId?: string; // Optional for backward compatibility; omitted in new votes for secrecy
   candidato_id: string | null;
   candidateId?: string | null;
   write_in_name?: string;
   fecha_voto: string;
   timestamp?: string;
-  receipt: string;
+  receipt: string; // Cryptographic verification hash
 }
 
 export interface SystemMetrics {

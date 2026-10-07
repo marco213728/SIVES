@@ -1,14 +1,16 @@
 
 import React, { useMemo } from 'react';
 import { Election, Candidate, Vote } from '../types';
+import { ShieldCheckIcon } from './icons';
 
 interface ResultsViewerProps {
     election: Election;
     candidates: Candidate[];
     votes: Vote[];
+    onGenerateActa?: (election: Election) => void;
 }
 
-const ResultsViewer: React.FC<ResultsViewerProps> = ({ election, candidates, votes }) => {
+const ResultsViewer: React.FC<ResultsViewerProps> = ({ election, candidates, votes, onGenerateActa }) => {
     
     const results = useMemo(() => {
         const electionVotes = votes.filter(v => v.eleccion_id === election.id);
@@ -64,9 +66,22 @@ const ResultsViewer: React.FC<ResultsViewerProps> = ({ election, candidates, vot
     }, [election, candidates, votes]);
 
     return (
-        <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-2xl font-bold text-slate-800 mb-4">{election.nombre}</h3>
-            <p className="text-gray-600 mb-6">Total de votos: <span className="font-bold">{results.totalVotes}</span></p>
+        <div className="bg-white p-6 rounded-xl shadow-md border border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-4 mb-4">
+                <div>
+                    <h3 className="text-2xl font-bold text-slate-800">{election.nombre}</h3>
+                    <p className="text-gray-600 text-sm mt-1">Total de votos en urna: <span className="font-bold text-slate-900">{results.totalVotes}</span></p>
+                </div>
+                {onGenerateActa && (
+                    <button
+                        onClick={() => onGenerateActa(election)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm rounded-xl shadow-sm transition hover:scale-102"
+                    >
+                        <ShieldCheckIcon className="h-4 w-4 text-emerald-400" />
+                        <span>Emitir Acta de Escrutinio</span>
+                    </button>
+                )}
+            </div>
 
             {results.totalVotes === 0 ? (
                 <p className="text-center text-gray-500 py-8">Aún no hay votos para esta elección.</p>

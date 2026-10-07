@@ -8,6 +8,7 @@ import VoterImportModal from './VoterImportModal';
 import ResultsViewer from './ResultsViewer';
 import AuditLog from './AuditLog';
 import ElectionOverviewModal from './ElectionOverviewModal';
+import ActaCierreEscrutinioModal from './ActaCierreEscrutinioModal';
 
 interface AdminDashboardProps {
     organization: Organization;
@@ -45,6 +46,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     
     const [selectedElectionForOverview, setSelectedElectionForOverview] = useState<Election | null>(null);
+    const [isActaModalOpen, setIsActaModalOpen] = useState(false);
+    const [selectedElectionForActa, setSelectedElectionForActa] = useState<Election | null>(null);
 
     const openElectionModal = (election: Election | null = null) => {
         setEditingElection(election);
@@ -53,6 +56,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     
     const openOverviewModal = (election: Election) => {
         setSelectedElectionForOverview(election);
+    };
+
+    const openActaModal = (election: Election) => {
+        setSelectedElectionForActa(election);
+        setIsActaModalOpen(true);
     };
 
     const openCandidateModal = (candidate: Candidate | null = null) => {
@@ -95,21 +103,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     const handleImportSubmit = (voters: Omit<User, 'id' | 'rol' | 'ha_votado'>[]) => {
         props.onImportVoters(voters);
         setIsImportModalOpen(false);
-    }
+    };
 
     const renderContent = () => {
         switch (activeTab) {
             case 'audit':
                 return <AuditLog votes={props.votes} elections={props.elections} />;
             case 'elections':
-                return <ManageElections elections={props.elections} openModal={openElectionModal} onDelete={props.onDeleteElection} onViewOverview={openOverviewModal} />;
+                return (
+                    <ManageElections
+                        elections={props.elections}
+                        openModal={openElectionModal}
+                        onDelete={props.onDeleteElection}
+                        onViewOverview={openOverviewModal}
+                        onOpenActa={openActaModal}
+                    />
+                );
             case 'candidates':
                 return <ManageCandidates candidates={props.candidates} elections={props.elections} openModal={openCandidateModal} onDelete={props.onDeleteCandidate} />;
             case 'voters':
                 return <ManageVoters users={props.users} openModal={openVoterModal} onDelete={props.onDeleteVoter} openImportModal={() => setIsImportModalOpen(true)} />;
             case 'results':
             default:
-                return <ViewResults elections={props.elections} candidates={props.candidates} votes={props.votes} />;
+                return (
+                    <ViewResults
+                        elections={props.elections}
+                        candidates={props.candidates}
+                        votes={props.votes}
+                        onOpenActa={openActaModal}
+                    />
+                );
         }
     };
 
@@ -147,6 +170,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
             <VoterFormModal isOpen={isVoterModalOpen} onClose={() => setIsVoterModalOpen(false)} onSubmit={handleVoterSubmit} voter={editingVoter} />
             <VoterImportModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} onImport={handleImportSubmit} />
             <ElectionOverviewModal isOpen={!!selectedElectionForOverview} onClose={() => setSelectedElectionForOverview(null)} election={selectedElectionForOverview} organization={props.organization} />
+            {selectedElectionForActa && (
+                <ActaCierreEscrutinioModal
+                    isOpen={isActaModalOpen}
+                    onClose={() => setIsActaModalOpen(false)}
+                    election={selectedElectionForActa}
+                    organization={props.organization}
+                    candidates={props.candidates}
+                    votes={props.votes}
+                    users={props.users}
+                />
+            )}
         </div>
     );
 };
@@ -159,48 +193,99 @@ const TabButton: React.FC<{ icon: React.ReactNode, label: string, isActive: bool
     </button>
 );
 
-const ViewResults: React.FC<{ elections: Election[], candidates: Candidate[], votes: Vote[] }> = ({ elections, candidates, votes }) => (
-    <div className="space-y-8">
-        {elections.length > 0 ? (
-            elections.map(e => <ResultsViewer key={e.id} election={e} candidates={candidates} votes={votes} />)
-        ) : (
-            <p className="text-center text-gray-500 py-8">No hay elecciones para mostrar resultados.</p>
-        )}
-    </div>
-);
+const ViewResults: React.FC<{
+    elections: Election[];
+    candidates: Candidate[];
+    votes: Vote[];
+    onOpenActa: (e: Election) => void;
+}> = ({ elections, candidates, votes, onOpenActa }) => {
+    const uniqueElections = useMemo(() => {
+        const seen = new Set<string>();
+        return elections.filter((e) => {
+            if (!e.id || seen.has(e.id)) return false;
+            seen.add(e.id);
+            return true;
+        });
+    }, [elections]);
 
-const ManageElections: React.FC<{ elections: Election[], openModal: (e: Election | null) => void, onDelete: (id: string) => void, onViewOverview: (e: Election) => void }> = ({ elections, openModal, onDelete, onViewOverview }) => (
-    <div>
-        <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-semibold">Gestionar Elecciones</h3>
-            <button onClick={() => openModal(null)} className="flex items-center bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-primary-darker">
-                <PlusIcon className="h-5 w-5 mr-2" /> Agregar Elección
-            </button>
+    return (
+        <div className="space-y-8">
+            {uniqueElections.length > 0 ? (
+                uniqueElections.map((e, index) => (
+                    <ResultsViewer
+                        key={e.id || `res-elec-${index}`}
+                        election={e}
+                        candidates={candidates}
+                        votes={votes}
+                        onGenerateActa={onOpenActa}
+                    />
+                ))
+            ) : (
+                <p className="text-center text-gray-500 py-8">No hay elecciones para mostrar resultados.</p>
+            )}
         </div>
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-            <ul className="divide-y divide-gray-200">
-                {elections.map(e => (
-                    <li key={e.id} className="px-6 py-5 flex items-center justify-between hover:bg-slate-50">
-                        <div>
-                            <p className="text-md font-medium text-slate-800 truncate">{e.nombre}</p>
-                            <p className="text-sm text-gray-500">{e.fecha_inicio} al {e.fecha_fin} - <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                e.estado === 'Activa' ? 'bg-green-100 text-green-800' : e.estado === 'Cerrada' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-                            }`}>{e.estado}</span></p>
-                        </div>
-                        <div className="space-x-1">
-                            <button onClick={() => onViewOverview(e)} className="p-2 rounded-full text-gray-500 hover:bg-slate-200 hover:text-blue-600" title="Ver Detalles"><InformationCircleIcon className="h-5 w-5" /></button>
-                            <button onClick={() => openModal(e)} className="p-2 rounded-full text-gray-500 hover:bg-slate-200 hover:text-brand-primary" title="Editar"><PencilIcon className="h-5 w-5" /></button>
-                            <button onClick={() => window.confirm('¿Seguro que quiere eliminar esta elección?') && onDelete(e.id)} className="p-2 rounded-full text-gray-500 hover:bg-slate-200 hover:text-red-600" title="Eliminar"><TrashIcon className="h-5 w-5" /></button>
-                        </div>
-                    </li>
-                ))}
-            </ul>
+    );
+};
+
+const ManageElections: React.FC<{
+    elections: Election[];
+    openModal: (e: Election | null) => void;
+    onDelete: (id: string) => void;
+    onViewOverview: (e: Election) => void;
+    onOpenActa: (e: Election) => void;
+}> = ({ elections, openModal, onDelete, onViewOverview, onOpenActa }) => {
+    const uniqueElections = useMemo(() => {
+        const seen = new Set<string>();
+        return elections.filter((e) => {
+            if (!e.id || seen.has(e.id)) return false;
+            seen.add(e.id);
+            return true;
+        });
+    }, [elections]);
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold">Gestionar Elecciones</h3>
+                <button onClick={() => openModal(null)} className="flex items-center bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-primary-darker">
+                    <PlusIcon className="h-5 w-5 mr-2" /> Agregar Elección
+                </button>
+            </div>
+            <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+                <ul className="divide-y divide-gray-200">
+                    {uniqueElections.map((e, index) => (
+                        <li key={e.id || `manage-elec-${index}`} className="px-6 py-5 flex items-center justify-between hover:bg-slate-50">
+                            <div>
+                                <p className="text-md font-medium text-slate-800 truncate">{e.nombre}</p>
+                                <p className="text-sm text-gray-500">{e.fecha_inicio} al {e.fecha_fin} - <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                    e.estado === 'Activa' ? 'bg-green-100 text-green-800' : e.estado === 'Cerrada' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                                }`}>{e.estado}</span></p>
+                            </div>
+                            <div className="space-x-1">
+                                <button onClick={() => onOpenActa(e)} className="p-2 rounded-full text-gray-500 hover:bg-slate-200 hover:text-emerald-700" title="Acta Oficial de Cierre y Escrutinio"><ShieldCheckIcon className="h-5 w-5" /></button>
+                                <button onClick={() => onViewOverview(e)} className="p-2 rounded-full text-gray-500 hover:bg-slate-200 hover:text-blue-600" title="Ver Detalles"><InformationCircleIcon className="h-5 w-5" /></button>
+                                <button onClick={() => openModal(e)} className="p-2 rounded-full text-gray-500 hover:bg-slate-200 hover:text-brand-primary" title="Editar"><PencilIcon className="h-5 w-5" /></button>
+                                <button onClick={() => window.confirm('¿Seguro que quiere eliminar esta elección?') && onDelete(e.id)} className="p-2 rounded-full text-gray-500 hover:bg-slate-200 hover:text-red-600" title="Eliminar"><TrashIcon className="h-5 w-5" /></button>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 const ManageCandidates: React.FC<{ candidates: Candidate[], elections: Election[], openModal: (c: Candidate | null) => void, onDelete: (id: string) => void }> = ({ candidates, elections, openModal, onDelete }) => {
     const getElectionName = (id: string) => elections.find(e => e.id === id)?.nombre || 'Desconocida';
+    const uniqueCandidates = useMemo(() => {
+        const seen = new Set<string>();
+        return candidates.filter((c) => {
+            if (!c.id || seen.has(c.id)) return false;
+            seen.add(c.id);
+            return true;
+        });
+    }, [candidates]);
+
     return (
         <div>
             <div className="flex justify-between items-center mb-4">
@@ -211,8 +296,8 @@ const ManageCandidates: React.FC<{ candidates: Candidate[], elections: Election[
             </div>
              <div className="bg-white shadow overflow-hidden sm:rounded-lg">
                 <ul className="divide-y divide-gray-200">
-                    {candidates.map(c => (
-                        <li key={c.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50">
+                    {uniqueCandidates.map((c, index) => (
+                        <li key={c.id || `manage-cand-${index}`} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50">
                             <div className="flex items-center space-x-4">
                                 <img className="h-12 w-12 rounded-full" src={c.foto_url} alt="" />
                                 <div>

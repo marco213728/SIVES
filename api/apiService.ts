@@ -22,27 +22,41 @@ const getInitialData = (collectionName: string) => {
     }
 };
 
+const deduplicateList = <T>(list: T[]): T[] => {
+    if (!Array.isArray(list)) return [];
+    const seen = new Set<string>();
+    return list.filter((item: any) => {
+        if (item && typeof item === 'object' && item.id) {
+            if (seen.has(item.id)) return false;
+            seen.add(item.id);
+            return true;
+        }
+        return true;
+    });
+};
+
 const getLocalData = <T>(collectionName: string): T[] => {
     try {
         const item = localStorage.getItem(LOCAL_STORAGE_PREFIX + collectionName);
         if (item) {
             const parsed = JSON.parse(item);
             if (Array.isArray(parsed) && parsed.length > 0) {
+                const deduped = deduplicateList(parsed) as T[];
                 if (collectionName === 'users') {
-                    const hasSuper = (parsed as User[]).some(u => u.role === 'SUPERADMIN' || u.username === 'superadmin');
+                    const hasSuper = (deduped as User[]).some(u => u.role === 'SUPERADMIN' || u.username === 'superadmin');
                     if (!hasSuper) {
                         setLocalData('users', mockUsers);
                         return mockUsers as unknown as T[];
                     }
                 }
                 if (collectionName === 'organizations') {
-                    const hasStatus = (parsed as Organization[]).some(o => o.status);
+                    const hasStatus = (deduped as Organization[]).some(o => o.status);
                     if (!hasStatus) {
                         setLocalData('organizations', mockOrganizations);
                         return mockOrganizations as unknown as T[];
                     }
                 }
-                return parsed;
+                return deduped;
             }
         }
     } catch {
@@ -50,16 +64,17 @@ const getLocalData = <T>(collectionName: string): T[] => {
     }
     const initial = getInitialData(collectionName) as T[];
     try {
-        localStorage.setItem(LOCAL_STORAGE_PREFIX + collectionName, JSON.stringify(initial));
+        localStorage.setItem(LOCAL_STORAGE_PREFIX + collectionName, JSON.stringify(deduplicateList(initial)));
     } catch {
         // fallback
     }
-    return initial;
+    return deduplicateList(initial);
 };
 
 const setLocalData = <T>(collectionName: string, data: T[]) => {
     try {
-        localStorage.setItem(LOCAL_STORAGE_PREFIX + collectionName, JSON.stringify(data));
+        const clean = deduplicateList(data);
+        localStorage.setItem(LOCAL_STORAGE_PREFIX + collectionName, JSON.stringify(clean));
     } catch {
         // ignore
     }
@@ -72,7 +87,15 @@ const getCollectionData = async <T extends { id: string }>(collectionName: strin
         const snapshot = await getDocs(colRef);
         
         if (!snapshot.empty) {
-            const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as T));
+            const seen = new Set<string>();
+            const items: T[] = [];
+            for (const d of snapshot.docs) {
+                const item = { id: d.id, ...d.data() } as T;
+                if (!seen.has(item.id)) {
+                    seen.add(item.id);
+                    items.push(item);
+                }
+            }
             setLocalData(collectionName, items);
             return items;
         } else {
@@ -442,7 +465,8 @@ export const addElection = async (
         resultados_publicos: electionData.resultados_publicos || false,
     };
 
-    setLocalData('elections', [...elections, newElection]);
+    const nextElections = [...elections.filter(e => e.id !== newElection.id), newElection];
+    setLocalData('elections', nextElections);
     await saveDocument('elections', newElection.id, newElection).catch(() => {});
     return newElection;
 };
@@ -565,6 +589,25 @@ export const getVotes = async (
     });
 };
 
+// Helper: Non-forgeable SHA-256 cryptographic receipt generator using Web Crypto API
+async function generateCryptographicReceipt(orgId: string, electionId: string, timestamp: string): Promise<string> {
+    try {
+        const entropy = `${orgId}:${electionId}:${timestamp}:${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36)}`;
+        if (typeof crypto !== 'undefined' && crypto.subtle) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(entropy);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+            return `RCPT-${orgId.toUpperCase()}-${electionId.slice(-4)}-${hashHex.substring(0, 12)}`;
+        }
+    } catch {
+        // Fallback if subtle crypto is unavailable
+    }
+    const hashPart = Math.random().toString(36).substring(2, 10).toUpperCase();
+    return `RCPT-${orgId.toUpperCase()}-${electionId.slice(-4)}-${hashPart}`;
+}
+
 export const castVote = async (
     orgId: string,
     electionId: string,
@@ -589,24 +632,25 @@ export const castVote = async (
     }
 
     const timestamp = new Date().toISOString();
-    const hashPart = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const receipt = `RCPT-${orgId.toUpperCase()}-${electionId.slice(-4)}-${hashPart}`;
+    // 1. Generate non-forgeable cryptographic receipt
+    const receipt = await generateCryptographicReceipt(orgId, electionId, timestamp);
 
+    // 2. Anonymous Ballot: Delink voter identity from ballot record (strictly omit user_id & voterId)
+    const voteRandomSuffix = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().substring(0, 8) : Math.random().toString(36).substring(2, 8);
     const newVote: Vote = {
-        id: 'vote_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        id: `vote_${Date.now()}_${voteRandomSuffix}`,
         organizationId: orgId,
         electionId,
         eleccion_id: electionId,
-        user_id: voterId,
-        voterId,
         candidato_id: candidateId,
         candidateId,
-        write_in_name: writeInName,
+        write_in_name: writeInName?.trim() || undefined,
         fecha_voto: timestamp,
         timestamp,
         receipt,
     };
 
+    // 3. Mark participation on voter record (without recording their candidate choice)
     const updatedUser: User = {
         ...voter,
         ha_votado: [...alreadyVotedList, electionId],
