@@ -1,6 +1,74 @@
 // System Roles (RBAC)
 export type UserRole = 'SUPERADMIN' | 'ADMIN' | 'STUDENT';
 
+// SaaS Subscription Tier for Educational Institutions
+export type SubscriptionTier = 'Free' | 'Basic' | 'Standard' | 'Premium' | 'Enterprise';
+export type BillingFrequency = 'None' | 'Monthly' | 'Annual';
+
+export interface PlanFeatureLimits {
+  tier: SubscriptionTier;
+  label: string;
+  maxVoters: number | 'Ilimitado';
+  maxElections: number | 'Ilimitado';
+  description: string;
+  badgeBg: string;
+  badgeText: string;
+  badgeBorder: string;
+}
+
+export const SUBSCRIPTION_PLANS: Record<SubscriptionTier, PlanFeatureLimits> = {
+  Free: {
+    tier: 'Free',
+    label: 'Gratuito',
+    maxVoters: 100,
+    maxElections: 1,
+    description: 'Padrón de hasta 100 electores, 1 elección activa.',
+    badgeBg: 'bg-slate-100',
+    badgeText: 'text-slate-800',
+    badgeBorder: 'border-slate-300',
+  },
+  Basic: {
+    tier: 'Basic',
+    label: 'Básico',
+    maxVoters: 500,
+    maxElections: 3,
+    description: 'Padrón de hasta 500 electores, 3 elecciones simultáneas.',
+    badgeBg: 'bg-sky-100',
+    badgeText: 'text-sky-800',
+    badgeBorder: 'border-sky-300',
+  },
+  Standard: {
+    tier: 'Standard',
+    label: 'Estándar',
+    maxVoters: 1500,
+    maxElections: 5,
+    description: 'Padrón hasta 1,500 estudiantes, actas digitales y recibos SHA-256.',
+    badgeBg: 'bg-blue-100',
+    badgeText: 'text-blue-800',
+    badgeBorder: 'border-blue-300',
+  },
+  Premium: {
+    tier: 'Premium',
+    label: 'Premium',
+    maxVoters: 5000,
+    maxElections: 10,
+    description: 'Hasta 5,000 electores, soporte prioritario, fotos en alta resolución.',
+    badgeBg: 'bg-amber-100',
+    badgeText: 'text-amber-800',
+    badgeBorder: 'border-amber-300',
+  },
+  Enterprise: {
+    tier: 'Enterprise',
+    label: 'Enterprise',
+    maxVoters: 'Ilimitado',
+    maxElections: 'Ilimitado',
+    description: 'Padrón y elecciones ilimitadas, multi-sede, soporte institucional 24/7.',
+    badgeBg: 'bg-indigo-100',
+    badgeText: 'text-indigo-800',
+    badgeBorder: 'border-indigo-300',
+  },
+};
+
 // Organization / Institution Entity (Tenant)
 export interface Organization {
   id: string; // Slug or unique identifier (e.g., 'uemol', 'galileo')
@@ -13,8 +81,10 @@ export interface Organization {
   createdAt?: string;
   updatedAt?: string;
   location?: string;
-  subscriptionType?: string;
-  billingType?: string;
+  subscriptionType?: SubscriptionTier | string;
+  billingType?: BillingFrequency | string;
+  maxVoters?: number;
+  maxElections?: number;
 }
 
 // User Model (Superadmin, School Admin, Student)

@@ -334,15 +334,37 @@ const App: React.FC = () => {
 
     if (mode === 'ADMIN') {
       const authEmail = (email || username || '').trim();
-      const res = await apiService.loginAdmin(authEmail, password || '');
+      const res = await apiService.loginAdmin(authEmail, password || '', targetOrg.id);
       if (!res.success || !res.user) {
         return {
           success: false,
-          error: res.error || 'Correo o contraseña de administrador escolar incorrectos.',
+          error: res.error || 'Correo electrónico o contraseña de administrador escolar incorrectos.',
         };
       }
 
-      setCurrentOrganization(targetOrg);
+      const isUserAdmin = res.user.role === 'ADMIN' || res.user.rol === 'Admin';
+      
+      // Strict Tenant Isolation: Block cross-organization admin access
+      if (isUserAdmin) {
+        if (!res.user.organizationId) {
+          return {
+            success: false,
+            error: 'Acceso denegado: Su cuenta de administrador no tiene una institución asignada en el sistema.',
+          };
+        }
+
+        if (res.user.organizationId !== targetOrg.id) {
+          const actualOrg = organizations.find((o) => o.id === res.user?.organizationId);
+          const actualName = actualOrg ? actualOrg.name : res.user.organizationId;
+          return {
+            success: false,
+            error: `Acceso no autorizado: Sus credenciales pertenecen a "${actualName}". No puede acceder al entorno administrativo de "${targetOrg.name}".`,
+          };
+        }
+      }
+
+      const assignedOrg = organizations.find((o) => o.id === res.user?.organizationId) || targetOrg;
+      setCurrentOrganization(assignedOrg);
       setCurrentUser(res.user);
       setShowSettings(false);
       return { success: true };

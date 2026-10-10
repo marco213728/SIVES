@@ -29,7 +29,7 @@ const SettingsPage: React.FC<SettingsPageProps> = (props) => {
             case 'appearance':
                  return <AppearanceSettings settings={props.organization} onUpdateSettings={props.onUpdateOrganization} />;
             case 'security':
-                return <SecuritySettings />;
+                return <SecuritySettings user={props.user} onUpdateUser={props.onUpdateUser} />;
         }
     }
 

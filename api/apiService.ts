@@ -9,6 +9,8 @@ import {
     getAllPublicResults, 
     loginAdmin, 
     loginStudent,
+    recoverPassword,
+    updateAdminPassword,
     logout 
 } from './auth';
 
@@ -20,6 +22,8 @@ export {
     getAllPublicResults, 
     loginAdmin, 
     loginStudent,
+    recoverPassword,
+    updateAdminPassword,
     logout 
 };
 
@@ -247,7 +251,7 @@ export const createOrgAdmin = async (
         (u.username && u.username.toLowerCase() === adminData.username.toLowerCase())
     );
     if (existing) {
-        throw new Error(`El administrador '${adminData.username}' ya existe.`);
+        throw new Error(`El administrador '${adminData.username}' o correo '${cleanEmail}' ya existe.`);
     }
 
     const newAdmin: User = {
@@ -257,6 +261,7 @@ export const createOrgAdmin = async (
         codigo: adminData.username,
         name: adminData.name,
         email: cleanEmail,
+        password: adminData.password || 'adminPassword123',
         role: 'ADMIN',
         rol: 'Admin',
         ha_votado: [],

@@ -9,6 +9,7 @@ import {
   XCircleIcon,
   KeyIcon,
 } from './icons';
+import { recoverPassword } from '../api/apiService';
 
 export interface LoginCredentials {
   mode: UserRole;
@@ -46,6 +47,52 @@ const LoginComponent: React.FC<LoginComponentProps> = ({
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Password Recovery Modal State
+  const [isRecoverModalOpen, setIsRecoverModalOpen] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryStatus, setRecoveryStatus] = useState<{
+    type: 'success' | 'error';
+    message: string;
+    setupLink?: string;
+  } | null>(null);
+
+  const handleRecoverPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoveryEmail.trim() || !recoveryEmail.includes('@')) {
+      setRecoveryStatus({
+        type: 'error',
+        message: 'Por favor ingrese un correo electrónico válido.',
+      });
+      return;
+    }
+
+    try {
+      setRecoveryLoading(true);
+      setRecoveryStatus(null);
+      const res = await recoverPassword(recoveryEmail.trim());
+      if (res.success) {
+        setRecoveryStatus({
+          type: 'success',
+          message: res.message,
+          setupLink: res.setupLink,
+        });
+      } else {
+        setRecoveryStatus({
+          type: 'error',
+          message: res.message || 'No se pudo enviar el correo de recuperación.',
+        });
+      }
+    } catch (err: any) {
+      setRecoveryStatus({
+        type: 'error',
+        message: err?.message || 'Error al solicitar recuperación de contraseña.',
+      });
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
 
   // Default to first active organization
   useEffect(() => {
@@ -374,9 +421,22 @@ const LoginComponent: React.FC<LoginComponentProps> = ({
 
           {/* Password Input */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Contraseña
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Contraseña
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setRecoveryEmail(username.includes('@') ? username.trim() : '');
+                  setRecoveryStatus(null);
+                  setIsRecoverModalOpen(true);
+                }}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline"
+              >
+                ¿Olvidó su contraseña?
+              </button>
+            </div>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                 <LockClosedIcon className="h-5 w-5 text-slate-400" />
@@ -409,6 +469,108 @@ const LoginComponent: React.FC<LoginComponentProps> = ({
           </button>
         </form>
       </div>
+
+      {/* Password Recovery Modal */}
+      {isRecoverModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
+                  <KeyIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Recuperación de Contraseña
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Acceso para administradores escolares y directivos
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRecoverModalOpen(false);
+                  setRecoveryStatus(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleRecoverPassword} className="mt-4 space-y-4">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Ingrese el correo electrónico institucional de su cuenta de administrador. Le enviaremos un enlace oficial de recuperación para restablecer su clave de acceso.
+              </p>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Correo Electrónico Institucional
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <UserIcon className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <input
+                    type="email"
+                    required
+                    value={recoveryEmail}
+                    onChange={(e) => setRecoveryEmail(e.target.value)}
+                    placeholder="admin@colegio.edu.ec"
+                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                </div>
+              </div>
+
+              {recoveryStatus && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-medium border ${
+                    recoveryStatus.type === 'success'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-red-50 border-red-200 text-red-800'
+                  }`}
+                >
+                  <p>{recoveryStatus.message}</p>
+                  {recoveryStatus.setupLink && (
+                    <div className="mt-2 pt-2 border-t border-emerald-200/60">
+                      <a
+                        href={recoveryStatus.setupLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow-xs"
+                      >
+                        Abrir enlace de restablecimiento →
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRecoverModalOpen(false);
+                    setRecoveryStatus(null);
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Cerrar
+                </button>
+                <button
+                  type="submit"
+                  disabled={recoveryLoading}
+                  className="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-md transition-colors disabled:bg-slate-400"
+                >
+                  {recoveryLoading ? 'Enviando...' : 'Enviar Enlace de Recuperación'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
