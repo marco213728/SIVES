@@ -96,15 +96,40 @@
         "organizationId": { "type": "string" },
         "electionId": { "type": "string" },
         "eleccion_id": { "type": "string" },
-        "userId": { "type": "string" },
-        "user_id": { "type": "string" },
         "candidateId": { "type": "string" },
         "candidato_id": { "type": "string" },
         "write_in_name": { "type": "string" },
         "receipt": { "type": "string" },
         "fecha_voto": { "type": "string" }
       },
-      "required": ["organizationId", "eleccion_id", "user_id", "receipt"]
+      "required": ["organizationId", "eleccion_id", "receipt"]
+    },
+    "Result": {
+      "title": "Result",
+      "description": "Resultados oficiales publicados de elecciones",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "electionId": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "publishedAt": { "type": "string" },
+        "totalVotes": { "type": "number" },
+        "isOfficial": { "type": "boolean" }
+      },
+      "required": ["electionId", "organizationId", "totalVotes"]
+    },
+    "VoterParticipation": {
+      "title": "VoterParticipation",
+      "description": "Registro de participación de estudiante disociado del voto",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "electionId": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["organizationId", "studentId", "electionId"]
     }
   },
   "firestore": {
@@ -127,6 +152,14 @@
     "/votes/{voteId}": {
       "schema": "Vote",
       "description": "Sufragios emitidos y recibos criptográficos"
+    },
+    "/results/{electionId}": {
+      "schema": "Result",
+      "description": "Resultados oficiales publicados"
+    },
+    "/voter_participations/{participationId}": {
+      "schema": "VoterParticipation",
+      "description": "Control de participación electoral disociada"
     }
   }
 }

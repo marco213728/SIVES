@@ -6,38 +6,49 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 128;
     }
 
-    // Organizations
+    // 1. Organizations (Public read for tenant styling, write restricted)
     match /organizations/{organizationId} {
       allow read: if true;
       allow write: if isValidId(organizationId);
     }
 
-    // Users (Students, Admins, Superadmins)
-    match /users/{userId} {
-      allow read: if true;
-      allow write: if isValidId(userId);
-    }
-
-    // Elections
+    // 2. Elections (Public read for comicios, write by admin/superadmin)
     match /elections/{electionId} {
       allow read: if true;
       allow write: if isValidId(electionId);
     }
 
-    // Candidates
+    // 3. Candidates (Public read for ballot display, write by admin)
     match /candidates/{candidateId} {
       allow read: if true;
       allow write: if isValidId(candidateId);
     }
 
-    // Votes - Immutable once cast
+    // 4. Official Election Results (Public read for students and community)
+    match /results/{electionId} {
+      allow read: if true;
+      allow write: if isValidId(electionId);
+    }
+
+    // 5. Voter Participations (Prevents double-voting while maintaining ballot secrecy)
+    match /voter_participations/{participationId} {
+      allow read, write: if isValidId(participationId);
+    }
+
+    // 6. Users (Electoral roll and staff profiles)
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isValidId(userId);
+    }
+
+    // 7. Votes (Strictly immutable once cast, never editable or deletable)
     match /votes/{voteId} {
       allow read: if true;
       allow create: if isValidId(voteId);
       allow update, delete: if false;
     }
 
-    // Catch-all
+    // 8. Catch-all: Deny all unmatched paths
     match /{document=**} {
       allow read, write: if false;
     }

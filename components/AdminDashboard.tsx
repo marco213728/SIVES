@@ -26,6 +26,7 @@ interface AdminDashboardProps {
     onUpdateVoter: (voter: User) => void;
     onDeleteVoter: (id: string) => void;
     onImportVoters: (voters: Omit<User, 'id' | 'rol' | 'ha_votado'>[]) => void;
+    onPublishResults?: (electionId: string) => Promise<void>;
 }
 
 type Tab = 'results' | 'audit' | 'elections' | 'candidates' | 'voters';
@@ -131,6 +132,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                         candidates={props.candidates}
                         votes={props.votes}
                         onOpenActa={openActaModal}
+                        onPublishResults={props.onPublishResults}
                     />
                 );
         }
@@ -198,7 +200,8 @@ const ViewResults: React.FC<{
     candidates: Candidate[];
     votes: Vote[];
     onOpenActa: (e: Election) => void;
-}> = ({ elections, candidates, votes, onOpenActa }) => {
+    onPublishResults?: (electionId: string) => Promise<void>;
+}> = ({ elections, candidates, votes, onOpenActa, onPublishResults }) => {
     const uniqueElections = useMemo(() => {
         const seen = new Set<string>();
         return elections.filter((e) => {
@@ -218,6 +221,7 @@ const ViewResults: React.FC<{
                         candidates={candidates}
                         votes={votes}
                         onGenerateActa={onOpenActa}
+                        onPublishResults={onPublishResults}
                     />
                 ))
             ) : (

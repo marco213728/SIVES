@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Election, Candidate, Vote } from '../types';
+import { User, Election, Candidate, Vote, ElectionResult } from '../types';
 import { ThumbsUpIcon, BanIcon, PencilAltIcon, DocumentDuplicateIcon, InformationCircleIcon, ChartBarIcon } from './icons';
 import ResultsViewer from './ResultsViewer';
 
@@ -9,7 +9,8 @@ interface StudentDashboardProps {
   allActiveElections: Election[];
   closedElectionsWithPublicResults: Election[];
   candidates: Candidate[];
-  votes: Vote[];
+  votes?: Vote[];
+  publishedResults?: Record<string, ElectionResult>;
   onVote: (electionId: string, candidateId: string | null, isBlankVote: boolean, writeInName?: string) => void;
   lastVoteReceipts: string[];
 }
@@ -142,7 +143,17 @@ const ReceiptItem: React.FC<{receipt: string}> = ({ receipt }) => {
   );
 };
 
-const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, votableElections, allActiveElections, closedElectionsWithPublicResults, candidates, votes, onVote, lastVoteReceipts }) => {
+const StudentDashboard: React.FC<StudentDashboardProps> = ({ 
+  user, 
+  votableElections, 
+  allActiveElections, 
+  closedElectionsWithPublicResults, 
+  candidates, 
+  votes = [], 
+  publishedResults = {},
+  onVote, 
+  lastVoteReceipts 
+}) => {
   const [selection, setSelection] = useState<{ type: 'candidate', data: Candidate } | { type: 'blank' } | { type: 'write-in', name: string } | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -173,7 +184,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, votableElecti
                 {closedElectionsWithPublicResults
                     .filter((e, idx, arr) => arr.findIndex(item => item.id === e.id) === idx)
                     .map((e, idx) => (
-                        <ResultsViewer key={e.id || `res-closed-${idx}`} election={e} candidates={candidates} votes={votes} />
+                        <ResultsViewer 
+                            key={e.id || `res-closed-${idx}`} 
+                            election={e} 
+                            candidates={candidates} 
+                            votes={[]} 
+                            publishedResult={publishedResults[e.id]}
+                        />
                     ))}
             </div>
         </div>

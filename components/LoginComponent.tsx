@@ -14,6 +14,7 @@ export interface LoginCredentials {
   mode: UserRole;
   organizationId?: string;
   studentCode?: string;
+  email?: string;
   username?: string;
   password?: string;
 }
@@ -109,7 +110,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({
         return;
       }
       if (!username.trim() || !password.trim()) {
-        setError('Ingrese usuario y contraseña de administrador escolar.');
+        setError('Ingrese correo electrónico y contraseña de administrador escolar.');
         return;
       }
       setLoading(true);
@@ -117,6 +118,7 @@ const LoginComponent: React.FC<LoginComponentProps> = ({
         const result = await onLogin({
           mode: 'ADMIN',
           organizationId: currentOrganization.id,
+          email: username.trim(),
           username: username.trim(),
           password: password.trim(),
         });
@@ -131,13 +133,14 @@ const LoginComponent: React.FC<LoginComponentProps> = ({
     } else {
       // Superadmin
       if (!username.trim() || !password.trim()) {
-        setError('Ingrese usuario y contraseña de Superadministrador.');
+        setError('Ingrese correo electrónico y contraseña de Superadministrador.');
         return;
       }
       setLoading(true);
       try {
         const result = await onLogin({
           mode: 'SUPERADMIN',
+          email: username.trim(),
           username: username.trim(),
           password: password.trim(),
         });
@@ -150,30 +153,6 @@ const LoginComponent: React.FC<LoginComponentProps> = ({
         setLoading(false);
       }
     }
-  };
-
-  // Helper quick fills for testing
-  const fillStudent = (code: string, orgId: string) => {
-    const org = organizations.find((o) => o.id === orgId);
-    if (org) onSelectOrganization(org);
-    setStudentCode(code);
-    setError('');
-  };
-
-  const fillAdmin = (user: string, pass: string, orgId: string) => {
-    const org = organizations.find((o) => o.id === orgId);
-    if (org) onSelectOrganization(org);
-    setAdminRole('ADMIN');
-    setUsername(user);
-    setPassword(pass);
-    setError('');
-  };
-
-  const fillSuperadmin = () => {
-    setAdminRole('SUPERADMIN');
-    setUsername('superadmin');
-    setPassword('password123');
-    setError('');
   };
 
   // ==========================================
@@ -216,32 +195,14 @@ const LoginComponent: React.FC<LoginComponentProps> = ({
 
           {/* Student Form */}
           <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6">
-            {/* School Switcher (if multiple available) */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Institución Educativa
-              </label>
-              <select
-                value={currentOrganization?.id || ''}
-                onChange={handleOrgChange}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-primary"
-              >
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name} {org.status === 'INACTIVE' ? '(SUSPENDIDA)' : ''}
-                  </option>
-                ))}
-              </select>
-
-              {isCurrentOrgInactive && (
-                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-amber-800 text-xs font-medium">
-                  <XCircleIcon className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold">Institución Suspendida:</span> Las votaciones están pausadas temporalmente en este colegio.
-                  </div>
+            {isCurrentOrgInactive && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-amber-800 text-xs font-medium">
+                <XCircleIcon className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Institución Suspendida:</span> Las votaciones están pausadas temporalmente en este colegio.
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Student Code Input */}
             <div>
@@ -284,29 +245,6 @@ const LoginComponent: React.FC<LoginComponentProps> = ({
             >
               {loading ? 'Verificando Padrón...' : 'Ingresar a Votar'}
             </button>
-
-            {/* Demo Chips for Student Testing */}
-            <div className="pt-4 border-t border-slate-100 text-center">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-                Códigos de Prueba Rápida
-              </span>
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => fillStudent('2025001', 'uemol')}
-                  className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
-                >
-                  UEMOL: 2025001
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillStudent('GG2401', 'galileo')}
-                  className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
-                >
-                  Galileo: GG2401
-                </button>
-              </div>
-            </div>
 
             {/* Discreet Link to Staff / Admin Login */}
             <div className="pt-2 text-center">
@@ -413,22 +351,22 @@ const LoginComponent: React.FC<LoginComponentProps> = ({
             </div>
           )}
 
-          {/* Username Input */}
+          {/* Email / Username Input */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Usuario Autorizado
+              Correo Electrónico Autorizado
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                 <UserIcon className="h-5 w-5 text-slate-400" />
               </div>
               <input
-                type="text"
+                type="email"
                 required
                 autoFocus
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder={adminRole === 'ADMIN' ? 'admin_uemol' : 'superadmin'}
+                placeholder={adminRole === 'ADMIN' ? 'admin.uemol@sives.edu.ec' : 'superadmin@sives.edu.ec'}
                 className="w-full pl-11 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-900"
               />
             </div>
@@ -469,36 +407,6 @@ const LoginComponent: React.FC<LoginComponentProps> = ({
           >
             {loading ? 'Accediendo...' : 'Iniciar Sesión Administrativa'}
           </button>
-
-          {/* Demo Chips */}
-          <div className="pt-4 border-t border-slate-100 text-center">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-              Credenciales Demo de Administrador
-            </span>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => fillAdmin('admin_uemol', 'password123', 'uemol')}
-                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
-              >
-                Admin UEMOL
-              </button>
-              <button
-                type="button"
-                onClick={() => fillAdmin('admin_galileo', 'password123', 'galileo')}
-                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
-              >
-                Admin Galileo
-              </button>
-              <button
-                type="button"
-                onClick={fillSuperadmin}
-                className="px-2.5 py-1 rounded-lg bg-indigo-900 hover:bg-indigo-800 text-white text-xs font-bold transition-colors"
-              >
-                Superadmin Global
-              </button>
-            </div>
-          </div>
         </form>
       </div>
     </div>

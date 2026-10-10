@@ -1,26 +1,29 @@
 import { User, UserRole, Election, Candidate, Vote, Organization, AuditLogEntry, SystemMetrics } from '../types';
-import {
-    organizations as mockOrganizations,
-    users as mockUsers,
-    elections as mockElections,
-    candidates as mockCandidates,
-    votes as mockVotes
-} from '../mockData';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { 
+    castVoteSecure, 
+    getMyVotedElectionIds, 
+    publishResults, 
+    getPublicResults, 
+    getAllPublicResults, 
+    loginAdmin, 
+    loginStudent,
+    logout 
+} from './auth';
+
+export { 
+    castVoteSecure, 
+    getMyVotedElectionIds, 
+    publishResults, 
+    getPublicResults, 
+    getAllPublicResults, 
+    loginAdmin, 
+    loginStudent,
+    logout 
+};
 
 const LOCAL_STORAGE_PREFIX = 'sives_v2_';
-
-const getInitialData = (collectionName: string) => {
-    switch (collectionName) {
-        case 'organizations': return mockOrganizations;
-        case 'users': return mockUsers;
-        case 'elections': return mockElections;
-        case 'candidates': return mockCandidates;
-        case 'votes': return mockVotes;
-        default: return [];
-    }
-};
 
 const deduplicateList = <T>(list: T[]): T[] => {
     if (!Array.isArray(list)) return [];
@@ -36,42 +39,29 @@ const deduplicateList = <T>(list: T[]): T[] => {
 };
 
 const getLocalData = <T>(collectionName: string): T[] => {
+    // SECURITY: Users and votes are strictly confidential and must NEVER be stored in or retrieved from browser localStorage
+    if (collectionName === 'users' || collectionName === 'votes') {
+        return [];
+    }
     try {
         const item = localStorage.getItem(LOCAL_STORAGE_PREFIX + collectionName);
         if (item) {
             const parsed = JSON.parse(item);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                const deduped = deduplicateList(parsed) as T[];
-                if (collectionName === 'users') {
-                    const hasSuper = (deduped as User[]).some(u => u.role === 'SUPERADMIN' || u.username === 'superadmin');
-                    if (!hasSuper) {
-                        setLocalData('users', mockUsers);
-                        return mockUsers as unknown as T[];
-                    }
-                }
-                if (collectionName === 'organizations') {
-                    const hasStatus = (deduped as Organization[]).some(o => o.status);
-                    if (!hasStatus) {
-                        setLocalData('organizations', mockOrganizations);
-                        return mockOrganizations as unknown as T[];
-                    }
-                }
-                return deduped;
+                return deduplicateList(parsed) as T[];
             }
         }
     } catch {
         // fallback
     }
-    const initial = getInitialData(collectionName) as T[];
-    try {
-        localStorage.setItem(LOCAL_STORAGE_PREFIX + collectionName, JSON.stringify(deduplicateList(initial)));
-    } catch {
-        // fallback
-    }
-    return deduplicateList(initial);
+    return [];
 };
 
 const setLocalData = <T>(collectionName: string, data: T[]) => {
+    // SECURITY: Never persist users credentials or ballot votes to browser localStorage
+    if (collectionName === 'users' || collectionName === 'votes') {
+        return;
+    }
     try {
         const clean = deduplicateList(data);
         localStorage.setItem(LOCAL_STORAGE_PREFIX + collectionName, JSON.stringify(clean));
@@ -80,7 +70,7 @@ const setLocalData = <T>(collectionName: string, data: T[]) => {
     }
 };
 
-// Cloud sync & seeding helper
+// Cloud Firestore data retriever (No mock data auto-seeding when empty)
 const getCollectionData = async <T extends { id: string }>(collectionName: string): Promise<T[]> => {
     try {
         const colRef = collection(db, collectionName);
@@ -96,20 +86,19 @@ const getCollectionData = async <T extends { id: string }>(collectionName: strin
                     items.push(item);
                 }
             }
-            setLocalData(collectionName, items);
+            if (collectionName !== 'users' && collectionName !== 'votes') {
+                setLocalData(collectionName, items);
+            }
             return items;
         } else {
-            // First time cloud initialization: seed Firestore with initial data
-            const initial = getLocalData<T>(collectionName);
-            for (const item of initial) {
-                if (item.id) {
-                    await setDoc(doc(db, collectionName, item.id), item).catch(() => {});
-                }
-            }
-            return initial;
+            // When collection is empty, return empty array without filling Firestore with mockData
+            return [];
         }
     } catch (error) {
-        console.warn(`Firestore read failed for '${collectionName}', falling back to local storage:`, error);
+        console.warn(`Firestore read failed for '${collectionName}':`, error);
+        if (collectionName === 'users' || collectionName === 'votes') {
+            return [];
+        }
         return getLocalData<T>(collectionName);
     }
 };
@@ -251,10 +240,14 @@ export const createOrgAdmin = async (
     orgId: string,
     adminData: { username: string; name: string; password?: string; email?: string }
 ): Promise<User> => {
-    const users = getLocalData<User>('users');
-    const existing = users.find(u => u.username?.toLowerCase() === adminData.username.toLowerCase());
+    const cleanEmail = (adminData.email || `${adminData.username}@${orgId}.sives.edu`).trim().toLowerCase();
+    const users = await getUsers();
+    const existing = users.find(u => 
+        (u.email && u.email.toLowerCase() === cleanEmail) || 
+        (u.username && u.username.toLowerCase() === adminData.username.toLowerCase())
+    );
     if (existing) {
-        throw new Error(`El nombre de usuario '${adminData.username}' ya está en uso.`);
+        throw new Error(`El administrador '${adminData.username}' ya existe.`);
     }
 
     const newAdmin: User = {
@@ -263,8 +256,7 @@ export const createOrgAdmin = async (
         username: adminData.username,
         codigo: adminData.username,
         name: adminData.name,
-        email: adminData.email || `${adminData.username}@${orgId}.sives.edu`,
-        password: adminData.password || 'password123',
+        email: cleanEmail,
         role: 'ADMIN',
         rol: 'Admin',
         ha_votado: [],
@@ -275,8 +267,7 @@ export const createOrgAdmin = async (
         paralelo: 'Central'
     };
 
-    setLocalData('users', [...users, newAdmin]);
-    await saveDocument('users', newAdmin.id, newAdmin).catch(() => {});
+    await saveDocument('users', newAdmin.id, newAdmin);
     return newAdmin;
 };
 
@@ -323,9 +314,7 @@ export const addUser = async (
     userData: Omit<User, 'id' | 'ha_votado' | 'hasVoted'>,
     organizationId: string
 ): Promise<User> => {
-    const users = getLocalData<User>('users');
     const newId = 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-    
     const role: UserRole = userData.role || (userData.rol === 'Admin' ? 'ADMIN' : 'STUDENT');
     const fullName = userData.name || `${userData.primer_nombre || ''} ${userData.primer_apellido || ''}`.trim() || 'Usuario';
 
@@ -341,34 +330,26 @@ export const addUser = async (
         hasVoted: {},
     };
 
-    setLocalData('users', [...users, newUser]);
-    await saveDocument('users', newUser.id, newUser).catch(() => {});
+    await saveDocument('users', newUser.id, newUser);
     return newUser;
 };
 
 export const updateUser = async (updatedUser: User): Promise<User> => {
-    const users = getLocalData<User>('users');
-    const nextUsers = users.map(u => u.id === updatedUser.id ? { ...u, ...updatedUser } : u);
-    setLocalData('users', nextUsers);
-    await saveDocument('users', updatedUser.id, updatedUser).catch(() => {});
+    await saveDocument('users', updatedUser.id, updatedUser);
     return updatedUser;
 };
 
 export const deleteUser = async (id: string): Promise<void> => {
-    const users = getLocalData<User>('users');
-    setLocalData('users', users.filter(u => u.id !== id));
-    await removeDocument('users', id).catch(() => {});
+    await removeDocument('users', id);
 };
 
 export const importVoters = async (
     importedVoters: (Partial<User> & { codigo: string })[],
     organizationId: string
 ): Promise<User[]> => {
-    const currentUsers = getLocalData<User>('users');
+    const currentUsers = await getUsers(organizationId);
     const existingCodes = new Set(
-        currentUsers
-            .filter(u => u.organizationId === organizationId)
-            .map(u => (u.studentCode || u.codigo).toLowerCase())
+        currentUsers.map(u => (u.studentCode || u.codigo).toLowerCase())
     );
 
     const newVoters: User[] = [];
@@ -400,7 +381,6 @@ export const importVoters = async (
     });
 
     if (newVoters.length > 0) {
-        setLocalData('users', [...currentUsers, ...newVoters]);
         for (const voter of newVoters) {
             await saveDocument('users', voter.id, voter).catch(() => {});
         }
@@ -615,30 +595,18 @@ export const castVote = async (
     voterId: string,
     writeInName?: string
 ): Promise<{ updatedVote: Vote; updatedUser: User }> => {
-    const users = getLocalData<User>('users');
-    const userIndex = users.findIndex(u => u.id === voterId);
-    if (userIndex === -1) {
-        throw new Error('Votante no encontrado en el sistema.');
-    }
-
-    const voter = users[userIndex];
-    if (voter.organizationId && voter.organizationId !== orgId) {
-        throw new Error('Acceso no autorizado: El estudiante pertenece a otra institución.');
-    }
-
-    const alreadyVotedList = voter.ha_votado || [];
-    if (alreadyVotedList.includes(electionId) || voter.hasVoted?.[electionId]) {
-        throw new Error('El estudiante ya ha ejercido su voto en esta elección.');
-    }
+    // SECURITY: Use castVoteSecure to prevent storing votes in browser localStorage
+    const { receipt, voteId } = await castVoteSecure(
+        orgId,
+        electionId,
+        candidateId,
+        voterId,
+        writeInName
+    );
 
     const timestamp = new Date().toISOString();
-    // 1. Generate non-forgeable cryptographic receipt
-    const receipt = await generateCryptographicReceipt(orgId, electionId, timestamp);
-
-    // 2. Anonymous Ballot: Delink voter identity from ballot record (strictly omit user_id & voterId)
-    const voteRandomSuffix = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().substring(0, 8) : Math.random().toString(36).substring(2, 8);
-    const newVote: Vote = {
-        id: `vote_${Date.now()}_${voteRandomSuffix}`,
+    const updatedVote: Vote = {
+        id: voteId,
         organizationId: orgId,
         electionId,
         eleccion_id: electionId,
@@ -650,26 +618,16 @@ export const castVote = async (
         receipt,
     };
 
-    // 3. Mark participation on voter record (without recording their candidate choice)
     const updatedUser: User = {
-        ...voter,
-        ha_votado: [...alreadyVotedList, electionId],
-        hasVoted: {
-            ...(voter.hasVoted || {}),
-            [electionId]: true,
-        },
+        id: voterId,
+        codigo: voterId,
+        studentCode: voterId,
+        role: 'STUDENT',
+        ha_votado: [electionId],
+        hasVoted: { [electionId]: true },
     };
 
-    users[userIndex] = updatedUser;
-    setLocalData('users', users);
-
-    const votes = getLocalData<Vote>('votes');
-    setLocalData('votes', [...votes, newVote]);
-
-    await saveDocument('votes', newVote.id, newVote).catch(() => {});
-    await saveDocument('users', updatedUser.id, updatedUser).catch(() => {});
-
-    return { updatedVote: newVote, updatedUser };
+    return { updatedVote, updatedUser };
 };
 
 // Compatibility wrapper for addVote
@@ -699,9 +657,6 @@ export const getAuditLog = async (organizationId?: string): Promise<AuditLogEntr
 // ==========================================
 
 export const resetAllData = async (): Promise<void> => {
-    setLocalData('organizations', mockOrganizations);
-    setLocalData('users', mockUsers);
-    setLocalData('elections', mockElections);
-    setLocalData('candidates', mockCandidates);
-    setLocalData('votes', mockVotes);
+    // SECURITY: Data resetting from client is permanently disabled for production database safety
+    console.info('Reset prevented: Database integrity preserved.');
 };

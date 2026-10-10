@@ -6,7 +6,7 @@ import StudentDashboard from './components/StudentDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import SettingsPage from './components/SettingsPage';
 import SuperAdminDashboard from './components/superadmin/SuperAdminDashboard';
-import { User, Election, Candidate, Vote, Organization } from './types';
+import { User, Election, Candidate, Vote, Organization, ElectionResult } from './types';
 import * as apiService from './api/apiService';
 import { SwitchHorizontalIcon } from './components/icons';
 
@@ -35,6 +35,8 @@ const App: React.FC = () => {
   const [elections, setElections] = useState<Election[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [votes, setVotes] = useState<Vote[]>([]);
+  const [votedElectionIds, setVotedElectionIds] = useState<string[]>([]);
+  const [publicResults, setPublicResults] = useState<Record<string, ElectionResult>>({});
 
   const [currentOrganization, setCurrentOrganization] = useState<Organization | null>(null);
   const [inspectingOrg, setInspectingOrg] = useState<Organization | null>(null);
@@ -86,55 +88,61 @@ const App: React.FC = () => {
         // Read ?org= parameter from URL if provided
         const urlParams = new URLSearchParams(window.location.search);
         const orgParam = urlParams.get('org');
-        let targetOrg: Organization | undefined;
 
-        if (orgParam) {
-          const searchKey = orgParam.toLowerCase().trim();
-          targetOrg = orgs.find(
-            (o) =>
-              o.slug?.toLowerCase() === searchKey ||
-              o.id?.toLowerCase() === searchKey ||
-              o.code?.toLowerCase() === searchKey
-          );
-        }
+        setCurrentOrganization((prevOrg) => {
+          let targetOrg: Organization | undefined;
 
-        if (!targetOrg && currentOrganization) {
-          targetOrg = orgs.find((o) => o.id === currentOrganization.id) || currentOrganization;
-        }
+          if (orgParam) {
+            const searchKey = orgParam.toLowerCase().trim();
+            targetOrg = orgs.find(
+              (o) =>
+                o.slug?.toLowerCase() === searchKey ||
+                o.id?.toLowerCase() === searchKey ||
+                o.code?.toLowerCase() === searchKey
+            );
+          }
 
-        if (!targetOrg) {
-          targetOrg = orgs.find((o) => o.status === 'ACTIVE') || orgs[0];
-        }
+          if (!targetOrg && prevOrg) {
+            targetOrg = orgs.find((o) => o.id === prevOrg.id) || prevOrg;
+          }
 
-        setCurrentOrganization(targetOrg);
+          if (!targetOrg) {
+            targetOrg = orgs.find((o) => o.status === 'ACTIVE') || orgs[0];
+          }
 
-        // Keep URL in sync
-        if (targetOrg && targetOrg.slug) {
-          try {
-            const currentUrl = new URL(window.location.href);
-            if (currentUrl.searchParams.get('org') !== targetOrg.slug) {
-              currentUrl.searchParams.set('org', targetOrg.slug);
-              window.history.replaceState({}, '', currentUrl.toString());
-            }
-          } catch {}
-        }
+          // Keep URL in sync
+          if (targetOrg && targetOrg.slug) {
+            try {
+              const currentUrl = new URL(window.location.href);
+              if (currentUrl.searchParams.get('org') !== targetOrg.slug) {
+                currentUrl.searchParams.set('org', targetOrg.slug);
+                window.history.replaceState({}, '', currentUrl.toString());
+              }
+            } catch {}
+          }
+
+          return targetOrg;
+        });
       }
       setOrgLoaded(true);
     } catch (e) {
       console.error('Error loading SIVES data:', e);
       setOrgLoaded(true);
     }
-  }, [currentOrganization]);
+  }, []);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
   const handleLogout = useCallback(() => {
+    apiService.logout().catch(() => {});
     setCurrentUser(null);
     setInspectingOrg(null);
     setShowSettings(false);
     setShowTimeoutWarning(false);
+    setVotedElectionIds([]);
+    setLastVoteReceipts([]);
     if (timeoutId.current) clearTimeout(timeoutId.current);
     if (warningTimeoutId.current) clearTimeout(warningTimeoutId.current);
   }, []);
@@ -260,33 +268,24 @@ const App: React.FC = () => {
 
   const votableElectionsForCurrentUser = useMemo(() => {
     if (!currentUser || (currentUser.role !== 'STUDENT' && currentUser.rol !== 'Estudiante')) return [];
-    const votedList = currentUser.ha_votado || [];
     return activeElections.filter(
-      (e) => !votedList.includes(e.id) && !currentUser.hasVoted?.[e.id]
+      (e) => !votedElectionIds.includes(e.id)
     );
-  }, [currentUser, activeElections]);
+  }, [currentUser, activeElections, votedElectionIds]);
 
   // Unified multi-tenant login handler
   const handleLogin = async (
     credentials: LoginCredentials
   ): Promise<{ success: boolean; error?: string }> => {
-    const { mode, organizationId, studentCode, username, password } = credentials;
-
-    // Refresh users list from storage to ensure any recently created admins are recognized
-    const latestUsers = await apiService.getUsers();
-    setUsers(latestUsers);
+    const { mode, organizationId, studentCode, email, username, password } = credentials;
 
     if (mode === 'SUPERADMIN') {
-      const superUser = latestUsers.find(
-        (u) =>
-          (u.role === 'SUPERADMIN' || u.rol === 'Superadmin') &&
-          (u.username?.toLowerCase() === username?.toLowerCase() ||
-            u.codigo?.toLowerCase() === username?.toLowerCase())
-      );
-      if (!superUser || (superUser.password && superUser.password !== password)) {
-        return { success: false, error: 'Credenciales de Superadministrador incorrectas.' };
+      const authEmail = (email || username || '').trim();
+      const res = await apiService.loginAdmin(authEmail, password || '');
+      if (!res.success || !res.user) {
+        return { success: false, error: res.error || 'Credenciales de Superadministrador incorrectas.' };
       }
-      setCurrentUser(superUser);
+      setCurrentUser(res.user);
       setInspectingOrg(null);
       setShowSettings(false);
       return { success: true };
@@ -305,20 +304,26 @@ const App: React.FC = () => {
         };
       }
 
-      const student = latestUsers.find(
-        (u) =>
-          u.organizationId === targetOrg.id &&
-          (u.role === 'STUDENT' || u.rol === 'Estudiante') &&
-          ((u.studentCode && u.studentCode.toLowerCase() === studentCode?.toLowerCase()) ||
-            (u.codigo && u.codigo.toLowerCase() === studentCode?.toLowerCase()))
-      );
-
-      if (!student) {
+      const res = await apiService.loginStudent(targetOrg.id, studentCode || '');
+      if (!res.success || !res.student) {
         return {
           success: false,
-          error: `Código '${studentCode}' no registrado en el padrón de ${targetOrg.name}.`,
+          error: res.error || `Código '${studentCode}' no registrado en el padrón de ${targetOrg.name}.`,
         };
       }
+
+      const student = res.student;
+      // Retrieve elections this student has voted in securely
+      const votedIds = await apiService.getMyVotedElectionIds(student.id, targetOrg.id);
+      setVotedElectionIds(votedIds);
+
+      // Load published results for the school
+      try {
+        const pubResults = await apiService.getAllPublicResults(targetOrg.id);
+        const map: Record<string, ElectionResult> = {};
+        pubResults.forEach((r) => { map[r.electionId] = r; });
+        setPublicResults(map);
+      } catch {}
 
       setCurrentOrganization(targetOrg);
       setCurrentUser(student);
@@ -328,23 +333,17 @@ const App: React.FC = () => {
     }
 
     if (mode === 'ADMIN') {
-      const admin = latestUsers.find(
-        (u) =>
-          u.organizationId === targetOrg.id &&
-          (u.role === 'ADMIN' || u.rol === 'Admin') &&
-          ((u.username && u.username.toLowerCase() === username?.toLowerCase()) ||
-            (u.codigo && u.codigo.toLowerCase() === username?.toLowerCase()))
-      );
-
-      if (!admin || (admin.password && admin.password !== password)) {
+      const authEmail = (email || username || '').trim();
+      const res = await apiService.loginAdmin(authEmail, password || '');
+      if (!res.success || !res.user) {
         return {
           success: false,
-          error: 'Usuario o contraseña de administrador escolar incorrectos.',
+          error: res.error || 'Correo o contraseña de administrador escolar incorrectos.',
         };
       }
 
       setCurrentOrganization(targetOrg);
-      setCurrentUser(admin);
+      setCurrentUser(res.user);
       setShowSettings(false);
       return { success: true };
     }
@@ -352,7 +351,7 @@ const App: React.FC = () => {
     return { success: false, error: 'Modo de acceso no reconocido.' };
   };
 
-  // Voting handler
+  // Secure voting handler
   const handleVote = async (
     electionId: string,
     candidateId: string | null,
@@ -360,7 +359,7 @@ const App: React.FC = () => {
     writeInName?: string
   ) => {
     if (!currentUser || !activeOrg) return;
-    const { updatedVote, updatedUser } = await apiService.castVote(
+    const { receipt } = await apiService.castVoteSecure(
       activeOrg.id,
       electionId,
       candidateId,
@@ -368,10 +367,22 @@ const App: React.FC = () => {
       writeInName
     );
 
-    setVotes((prev) => [...prev, updatedVote]);
-    setUsers((prevUsers) => prevUsers.map((u) => (u.id === currentUser.id ? updatedUser : u)));
-    setCurrentUser(updatedUser);
-    setLastVoteReceipts((prev) => [...prev, updatedVote.receipt]);
+    setVotedElectionIds((prev) => [...prev, electionId]);
+    setLastVoteReceipts((prev) => [...prev, receipt]);
+  };
+
+  // Publish official results handler
+  const handlePublishResults = async (electionId: string) => {
+    if (!activeOrg) return;
+    const published = await apiService.publishResults(electionId, activeOrg.id);
+    setPublicResults((prev) => ({ ...prev, [electionId]: published }));
+    setElections((prev) =>
+      prev.map((e) =>
+        e.id === electionId
+          ? { ...e, resultados_publicos: true, status: 'CLOSED', estado: 'Cerrada' }
+          : e
+      )
+    );
   };
 
   // Election CRUD
@@ -514,6 +525,7 @@ const App: React.FC = () => {
               onUpdateVoter={handleUpdateUser}
               onDeleteVoter={handleDeleteVoter}
               onImportVoters={handleImportVoters}
+              onPublishResults={handlePublishResults}
             />
           </div>
         );
@@ -565,6 +577,7 @@ const App: React.FC = () => {
           onUpdateVoter={handleUpdateUser}
           onDeleteVoter={handleDeleteVoter}
           onImportVoters={handleImportVoters}
+          onPublishResults={handlePublishResults}
         />
       );
     }
@@ -581,6 +594,7 @@ const App: React.FC = () => {
           )}
           candidates={candidates}
           votes={orgVotes}
+          publishedResults={publicResults}
           onVote={handleVote}
           lastVoteReceipts={lastVoteReceipts}
         />

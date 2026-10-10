@@ -1,24 +1,47 @@
 
-import React, { useMemo } from 'react';
-import { Election, Candidate, Vote } from '../types';
+import React, { useMemo, useState } from 'react';
+import { Election, Candidate, Vote, ElectionResult } from '../types';
 import { ShieldCheckIcon } from './icons';
 
 interface ResultsViewerProps {
     election: Election;
     candidates: Candidate[];
     votes: Vote[];
+    publishedResult?: ElectionResult | null;
     onGenerateActa?: (election: Election) => void;
+    onPublishResults?: (electionId: string) => Promise<void> | void;
 }
 
-const ResultsViewer: React.FC<ResultsViewerProps> = ({ election, candidates, votes, onGenerateActa }) => {
+const ResultsViewer: React.FC<ResultsViewerProps> = ({ 
+    election, 
+    candidates, 
+    votes, 
+    publishedResult, 
+    onGenerateActa,
+    onPublishResults 
+}) => {
+    const [isPublishing, setIsPublishing] = useState(false);
     
     const results = useMemo(() => {
-        const electionVotes = votes.filter(v => v.eleccion_id === election.id);
+        // 1. If official published result from Firestore is available, use it directly
+        if (publishedResult) {
+            return {
+                totalVotes: publishedResult.totalVotes,
+                sortedCandidates: publishedResult.sortedCandidates,
+                blankVotes: publishedResult.blankVotes,
+                blankPercentage: publishedResult.blankPercentage,
+                sortedWriteIns: publishedResult.sortedWriteIns,
+                isOfficial: true,
+            };
+        }
+
+        // 2. Otherwise calculate locally from available votes
+        const electionVotes = votes.filter(v => v.eleccion_id === election.id || v.electionId === election.id);
         const totalVotes = electionVotes.length;
 
-        const candidateVotes: { [key: number]: number } = {};
+        const candidateVotes: { [key: string]: number } = {};
         candidates.forEach(c => {
-            if (c.eleccion_id === election.id) {
+            if (c.eleccion_id === election.id || c.electionId === election.id) {
                 candidateVotes[c.id] = 0;
             }
         });
@@ -27,10 +50,9 @@ const ResultsViewer: React.FC<ResultsViewerProps> = ({ election, candidates, vot
         const writeInVotes: { [key: string]: number } = {};
 
         electionVotes.forEach(vote => {
-            if (vote.candidato_id) {
-                if (candidateVotes.hasOwnProperty(vote.candidato_id)) {
-                    candidateVotes[vote.candidato_id]++;
-                }
+            const cId = vote.candidateId || vote.candidato_id;
+            if (cId && candidateVotes.hasOwnProperty(cId)) {
+                candidateVotes[cId]++;
             } else if (vote.write_in_name) {
                 const name = vote.write_in_name.trim().toLowerCase();
                 writeInVotes[name] = (writeInVotes[name] || 0) + 1;
@@ -40,7 +62,7 @@ const ResultsViewer: React.FC<ResultsViewerProps> = ({ election, candidates, vot
         });
         
         const sortedCandidates = candidates
-            .filter(c => c.eleccion_id === election.id)
+            .filter(c => c.eleccion_id === election.id || c.electionId === election.id)
             .map(candidate => ({
                 ...candidate,
                 voteCount: candidateVotes[candidate.id] || 0,
@@ -61,26 +83,57 @@ const ResultsViewer: React.FC<ResultsViewerProps> = ({ election, candidates, vot
             sortedCandidates,
             blankVotes,
             blankPercentage: totalVotes > 0 ? (blankVotes / totalVotes * 100).toFixed(2) : '0.00',
-            sortedWriteIns
+            sortedWriteIns,
+            isOfficial: false,
         };
-    }, [election, candidates, votes]);
+    }, [election, candidates, votes, publishedResult]);
+
+    const handlePublishClick = async () => {
+        if (!onPublishResults) return;
+        setIsPublishing(true);
+        try {
+            await onPublishResults(election.id);
+        } finally {
+            setIsPublishing(false);
+        }
+    };
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-md border border-slate-100">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-4 mb-4">
                 <div>
-                    <h3 className="text-2xl font-bold text-slate-800">{election.nombre}</h3>
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-2xl font-bold text-slate-800">{election.nombre || election.title}</h3>
+                        {(election.resultados_publicos || publishedResult) && (
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                Resultados Oficiales Publicados
+                            </span>
+                        )}
+                    </div>
                     <p className="text-gray-600 text-sm mt-1">Total de votos en urna: <span className="font-bold text-slate-900">{results.totalVotes}</span></p>
                 </div>
-                {onGenerateActa && (
-                    <button
-                        onClick={() => onGenerateActa(election)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm rounded-xl shadow-sm transition hover:scale-102"
-                    >
-                        <ShieldCheckIcon className="h-4 w-4 text-emerald-400" />
-                        <span>Emitir Acta de Escrutinio</span>
-                    </button>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                    {onPublishResults && !election.resultados_publicos && !publishedResult && (
+                        <button
+                            type="button"
+                            onClick={handlePublishClick}
+                            disabled={isPublishing}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl shadow-sm transition hover:scale-102 disabled:bg-indigo-300"
+                        >
+                            <span>{isPublishing ? 'Publicando...' : 'Publicar Resultados a Estudiantes'}</span>
+                        </button>
+                    )}
+                    {onGenerateActa && (
+                        <button
+                            type="button"
+                            onClick={() => onGenerateActa(election)}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm rounded-xl shadow-sm transition hover:scale-102"
+                        >
+                            <ShieldCheckIcon className="h-4 w-4 text-emerald-400" />
+                            <span>Emitir Acta de Escrutinio</span>
+                        </button>
+                    )}
+                </div>
             </div>
 
             {results.totalVotes === 0 ? (

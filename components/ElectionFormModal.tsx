@@ -20,6 +20,8 @@ const ElectionFormModal: React.FC<ElectionFormModalProps> = ({ isOpen, onClose, 
     const [error, setError] = useState('');
 
     useEffect(() => {
+        if (!isOpen) return;
+
         if (election) {
             setFormData({
                 nombre: election.nombre,
@@ -39,7 +41,8 @@ const ElectionFormModal: React.FC<ElectionFormModalProps> = ({ isOpen, onClose, 
                 descripcion: '',
             });
         }
-    }, [election, isOpen]);
+        setError('');
+    }, [election?.id, isOpen]);
 
     if (!isOpen) return null;
 

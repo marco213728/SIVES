@@ -20,7 +20,7 @@ export const OrgAdminModal: React.FC<OrgAdminModalProps> = ({
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('password123');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,6 +54,14 @@ export const OrgAdminModal: React.FC<OrgAdminModalProps> = ({
       setError('Usuario y nombre son requeridos');
       return;
     }
+    if (!email.trim()) {
+      setError('El correo electrónico institucional es requerido');
+      return;
+    }
+    if (password.trim().length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres seguros.');
+      return;
+    }
 
     try {
       setIsSubmitting(true);
@@ -62,13 +70,13 @@ export const OrgAdminModal: React.FC<OrgAdminModalProps> = ({
         name: name.trim(),
         username: username.trim(),
         email: email.trim(),
-        password: password.trim() || 'password123',
+        password: password.trim(),
       });
-      setSuccess(`Administrador '${username}' creado con éxito.`);
+      setSuccess(`Administrador '${username}' creado con éxito. Se enviaron credenciales de acceso.`);
       setName('');
       setUsername('');
       setEmail('');
-      setPassword('password123');
+      setPassword('');
       setShowAddForm(false);
       await loadAdmins();
     } catch (err: any) {

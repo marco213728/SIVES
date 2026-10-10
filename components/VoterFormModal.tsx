@@ -26,6 +26,8 @@ const VoterFormModal: React.FC<VoterFormModalProps> = ({ isOpen, onClose, onSubm
     const [error, setError] = useState('');
 
     useEffect(() => {
+        if (!isOpen) return;
+
         if (voter) {
             setFormData({
                 codigo: voter.codigo,
@@ -40,7 +42,8 @@ const VoterFormModal: React.FC<VoterFormModalProps> = ({ isOpen, onClose, onSubm
         } else {
             setFormData(initialFormData);
         }
-    }, [voter, isOpen]);
+        setError('');
+    }, [voter?.id, isOpen]);
 
     if (!isOpen) return null;
 

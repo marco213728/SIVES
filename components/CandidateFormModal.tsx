@@ -24,22 +24,38 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ isOpen, onClose
     const [error, setError] = useState('');
 
     useEffect(() => {
+        if (!isOpen) return;
+
         if (candidate) {
             setFormData({
-                eleccion_id: candidate.eleccion_id,
-                nombres: candidate.nombres,
-                apellido: candidate.apellido,
-                partido_politico: candidate.partido_politico,
-                cargo: candidate.cargo,
-                foto_url: candidate.foto_url,
+                eleccion_id: candidate.eleccion_id || candidate.electionId || '',
+                nombres: candidate.nombres || candidate.name || '',
+                apellido: candidate.apellido || '',
+                partido_politico: candidate.partido_politico || candidate.party || '',
+                cargo: candidate.cargo || '',
+                foto_url: candidate.foto_url || candidate.photoUrl || '',
                 descripcion: candidate.descripcion || '',
             });
         } else {
-             // Set default election if available
+            // Set default election if available on initial opening
             const defaultElectionId = elections.length > 0 ? elections[0].id : '';
-            setFormData({...initialFormData, eleccion_id: defaultElectionId });
+            setFormData({
+                ...initialFormData,
+                eleccion_id: defaultElectionId,
+            });
         }
-    }, [candidate, elections, isOpen]);
+        setError('');
+    }, [candidate?.id, isOpen]);
+
+    // Ensure election is preselected if elections become available after opening, without clearing inputs
+    useEffect(() => {
+        if (isOpen && !formData.eleccion_id && elections.length > 0) {
+            setFormData(prev => ({
+                ...prev,
+                eleccion_id: prev.eleccion_id || elections[0].id,
+            }));
+        }
+    }, [isOpen, elections.length, formData.eleccion_id]);
 
     if (!isOpen) return null;
 

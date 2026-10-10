@@ -127,3 +127,41 @@ export interface SystemMetrics {
   totalVoters: number;
   totalVotes: number;
 }
+
+// Public Official Results
+export interface ElectionResult {
+  id: string; // electionId
+  electionId: string;
+  organizationId: string;
+  publishedAt: string;
+  totalVotes: number;
+  sortedCandidates: Array<{
+    id: string;
+    nombres: string;
+    apellido: string;
+    party?: string;
+    partido_politico?: string;
+    cargo?: string;
+    photoUrl?: string;
+    foto_url?: string;
+    voteCount: number;
+    percentage: string;
+  }>;
+  blankVotes: number;
+  blankPercentage: string;
+  sortedWriteIns: Array<{
+    name: string;
+    voteCount: number;
+    percentage: string;
+  }>;
+  isOfficial: boolean;
+}
+
+// Voter Participation Record (Decoupled from ballot choices)
+export interface VoterParticipation {
+  id: string;
+  organizationId: string;
+  studentId: string;
+  electionId: string;
+  timestamp: string;
+}
